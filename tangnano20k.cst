@@ -1,8 +1,8 @@
-/*************************************************************************
- * Sipeed Tang Nano 20K - Master Constraints File
- * Family: GW2A-18C
- * Device: GW2AR-LV18QN88C8/I7
- *************************************************************************/
+//************************************************************************
+// Sipeed Tang Nano 20K - Master Constraints File
+// Family: GW2A-18C
+// Device: GW2AR-LV18QN88C8/I7
+//************************************************************************
 
 // ==============================================
 // SYSTEM CLOCK (27 MHz)
@@ -59,64 +59,23 @@ IO_PORT "uart_rx" IO_TYPE=LVCMOS33;
 // ==============================================
 // MICRO SD CARD (SPI Mode)
 // ==============================================
-// IO_LOC  "sd_clk" 83;
-// IO_PORT "sd_clk" PULL_MODE=NONE; 
-// IO_LOC  "sd_mosi" 82; // CMD
-// IO_PORT "sd_mosi" PULL_MODE=NONE;
-// IO_LOC  "sd_miso" 84; // D0
-// IO_PORT "sd_miso" PULL_MODE=NONE;
-// IO_LOC  "sd_cs"   81; // D3
-// IO_PORT "sd_cs"   PULL_MODE=NONE;
+IO_LOC  "sd_clk" 83;
+IO_PORT "sd_clk" PULL_MODE=NONE; 
+IO_LOC  "sd_mosi" 82; // CMD
+IO_PORT "sd_mosi" PULL_MODE=NONE;
+IO_LOC  "sd_miso" 84; // D0
+IO_PORT "sd_miso" PULL_MODE=NONE;
+IO_LOC  "sd_cs"   81; // D3
+IO_PORT "sd_cs"   PULL_MODE=NONE;
 
 // ==============================================
-// HDMI / TMDS (If using HDMI core)
+// HDMI / TMDS
 // ==============================================
-// IO_LOC "tmds_clk_p" 33,34;
-// IO_LOC "tmds_d0_p" 35,36;
-// IO_LOC "tmds_d1_p" 37,38;
-// IO_LOC "tmds_d2_p" 39,40;
-
-// ==============================================
-// SDR samples
-// ==============================================
-IO_LOC  "samp_clk" 77;
-IO_PORT "samp_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-
-IO_LOC  "i[7]" 26;
-IO_PORT "i[7]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[7]" 29;
-IO_PORT "q[7]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "i[6]" 30;
-IO_PORT "i[6]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[6]" 31;
-IO_PORT "q[6]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "i[5]" 72;
-IO_PORT "i[5]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[5]" 86;
-IO_PORT "q[5]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "i[4]" 49;
-IO_PORT "i[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[4]" 55;
-IO_PORT "q[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "i[3]" 48;
-IO_PORT "i[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[3]" 51;
-IO_PORT "q[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "i[2]" 54;
-IO_PORT "i[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[2]" 56;
-IO_PORT "q[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "i[1]" 41;
-IO_PORT "i[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[1]" 42;
-IO_PORT "q[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "i[0]" 80;
-IO_PORT "i[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-IO_LOC  "q[0]" 76;
-IO_PORT "q[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-
-
-
-# debug
-IO_LOC  "probe" 73;
-IO_PORT "probe" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC  "tmds_clk_p" 33; // CLK
+IO_PORT "tmds_clk_p" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
+IO_LOC  "tmds_d0_p" 35;  // D0_P (Blue)
+IO_PORT "tmds_d0_p" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
+IO_LOC  "tmds_d1_p" 37;  // D1_P (Green)
+IO_PORT "tmds_d1_p" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
+IO_LOC  "tmds_d2_p" 39;  // D2_P (Red)
+IO_PORT "tmds_d2_p" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;

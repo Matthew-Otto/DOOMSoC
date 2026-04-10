@@ -4,13 +4,15 @@ FMAX = 100
 SRC_DIR = RTL
 BUILD_DIR = build/
 SYNTH_OUT = $(BUILD_DIR)synth.json
+SYNTH_REPORT = $(BUILD_DIR)synth_report.txt
 PNR_OUT = $(BUILD_DIR)pnr.json
 PNR_REPORT = $(BUILD_DIR)pnr_report.txt
 BITSTREAM = $(BUILD_DIR)bitstream.fs
 CST = tangnano20k.cst
+SDC = timing.sdc
 
-# Sources (all .sv files in RTL/)
-SRC = $(wildcard $(SRC_DIR)/*.sv)
+# Sources (all .sv files in RTL/ recursive)
+SRC = $(shell find $(SRC_DIR) -type f -name '*.sv')
 
 # Device and board settings
 DEVICE = GW2AR-LV18QN88C8/I7
@@ -24,7 +26,7 @@ GOWIN_PACK = source /opt/oss-cad-suite/environment && gowin_pack
 OPENFPGALOADER = source /opt/oss-cad-suite/environment && openFPGALoader
 
 
-.PHONY: all clean flash
+.PHONY: all clean flash flash_persist synth pnr asm
 
 #---------------------------------------------------------------------
 # Main build target
@@ -36,13 +38,22 @@ all: $(BITSTREAM)
 	@echo "========================================"
 
 #---------------------------------------------------------------------
-# Full build from scratch
+# Flash compiled bitstream to device
 #---------------------------------------------------------------------
 flash: $(BITSTREAM)
 	@echo "========================================"
 	@echo "Programming FPGA..."
 	@echo "========================================"
 	$(OPENFPGALOADER) -b $(BOARD) $(BITSTREAM)
+
+#---------------------------------------------------------------------
+# Flash compiled bitstream to device flash (persistent)
+#---------------------------------------------------------------------
+flash_persist: $(BITSTREAM)
+	@echo "========================================"
+	@echo "Programming FPGA Internal Flash..."
+	@echo "========================================"
+	$(OPENFPGALOADER) -b $(BOARD) -f $(BITSTREAM)
 
 #---------------------------------------------------------------------
 # Dependency chain
@@ -52,14 +63,16 @@ $(BUILD_DIR):
 	@mkdir -p $@
 
 # Synthesis
-$(SYNTH_OUT): $(SRC) $(BUILD_DIR)
+$(SYNTH_OUT): $(SRC) | $(BUILD_DIR)
 	@echo "========================================"
 	@echo "Running synthesis..."
 	@echo "========================================"
-	$(YOSYS) -p "read_verilog -sv $(SRC); synth_gowin -top top -json $(SYNTH_OUT)"
+	$(YOSYS) -l $(SYNTH_REPORT) -p "read_verilog -sv $(SRC); synth_gowin -top top -json $(SYNTH_OUT)"
+	@printf "\nSynthesis Warnings:\n"
+	@grep -i "warning" $(SYNTH_REPORT) || true
 
 #  Place & Route
-$(PNR_OUT): $(SYNTH_OUT) $(CST)
+$(PNR_OUT): $(SYNTH_OUT) $(CST) $(SDC)
 	@echo "========================================"
 	@echo "Running place & route..."
 	@echo "========================================"
@@ -67,8 +80,10 @@ $(PNR_OUT): $(SYNTH_OUT) $(CST)
 		--device $(DEVICE) \
 		--vopt family=$(FAMILY) \
 		--vopt cst=$(CST) \
-		--log $(PNR_REPORT) \
-		--freq $(FMAX)
+		--sdc $(SDC) \
+		--log $(PNR_REPORT)
+	@printf "\nPnR Warnings:\n"
+	@grep -i "warning" $(PNR_REPORT) || true
 
 # Bitstream generation
 $(BITSTREAM): $(PNR_OUT)
@@ -76,6 +91,11 @@ $(BITSTREAM): $(PNR_OUT)
 	@echo "Compiling bitstream..."
 	@echo "========================================"
 	$(GOWIN_PACK) -d $(FAMILY) -o $(BITSTREAM) $(PNR_OUT)
+
+# Aliases
+synth: $(SYNTH_OUT)
+pnr: $(PNR_OUT)
+asm: $(BITSTREAM)
 
 #---------------------------------------------------------------------
 # Clean targets
