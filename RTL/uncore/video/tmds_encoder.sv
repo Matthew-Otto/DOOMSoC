@@ -9,23 +9,19 @@ module tmds_encoder (
     output logic [9:0] encoded
 );
 
-    // ---------------------------------------------------------
-    // Stage 1: Transition Minimization
-    // ---------------------------------------------------------
-    
-    // Combinational counting of 1s in the input data (no functions used)
-    logic [3:0] n1_d;
-    assign n1_d = color_value[0] + color_value[1] + color_value[2] + color_value[3] + color_value[4] + color_value[5] + color_value[6] + color_value[7];
+    // count number of 1s in the input data
+    logic [3:0] ones_cnt;
+    assign ones_cnt = color_value[0] + color_value[1] + color_value[2] + color_value[3] + color_value[4] + color_value[5] + color_value[6] + color_value[7];
 
     logic use_xnor;
-    // Condition to use XNOR encoding
-    assign use_xnor = (n1_d > 4'd4) || ((n1_d == 4'd4) && (color_value[0] == 1'b0));
+    assign use_xnor = (ones_cnt > 4'd4) || ((ones_cnt == 4'd4) && (color_value[0] == 1'b0));
 
     logic [8:0] q_m;
     
-    // Unrolled cascade logic for bit encoding
+    // Serial X(N)OR
     always_comb begin
         q_m[0] = color_value[0];
+        q_m[8] = ~use_xnor;
         if (use_xnor) begin
             q_m[1] = q_m[0] ^~ color_value[1];
             q_m[2] = q_m[1] ^~ color_value[2];
@@ -34,7 +30,6 @@ module tmds_encoder (
             q_m[5] = q_m[4] ^~ color_value[5];
             q_m[6] = q_m[5] ^~ color_value[6];
             q_m[7] = q_m[6] ^~ color_value[7];
-            q_m[8] = 1'b0;
         end else begin
             q_m[1] = q_m[0] ^ color_value[1];
             q_m[2] = q_m[1] ^ color_value[2];
@@ -43,13 +38,8 @@ module tmds_encoder (
             q_m[5] = q_m[4] ^ color_value[5];
             q_m[6] = q_m[5] ^ color_value[6];
             q_m[7] = q_m[6] ^ color_value[7];
-            q_m[8] = 1'b1;
         end
     end
-
-    // ---------------------------------------------------------
-    // Stage 2: DC Balancing
-    // ---------------------------------------------------------
     
     // Count 1s and 0s in the 8-bit payload of q_m
     logic [3:0] n1_qm;
@@ -63,11 +53,10 @@ module tmds_encoder (
 
     // Running disparity counter
     logic signed [5:0] cnt;
-
     always_ff @(posedge p_clk) begin
         if (reset) begin
-            encoded <= 10'b0;
-            cnt   <= 6'sd0;
+            encoded <= '0;
+            cnt     <= '0;
         end else begin
             if (!de) begin
                 // During blanking, reset disparity counter and output control tokens
@@ -106,6 +95,5 @@ module tmds_encoder (
             end
         end
     end
-    
 
 endmodule : tmds_encoder
