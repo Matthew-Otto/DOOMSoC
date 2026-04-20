@@ -1,8 +1,8 @@
-# doomcore
+# DOOMSoC
 
-doomcore is a custom RISC-V CPU designed to run DOOM at full speed and resolution on a Gowin Tang nano 20K.
+DOOMSoC is a custom RISC-V CPU designed to run DOOM at full speed and resolution on a Gowin Tang nano 20K.
 
-A complete writeup can be found at https://matthew-otto.github.io/projects/doomcore.
+A complete writeup can be found at https://matthew-otto.github.io/projects/doomsoc.
 
 This repo contains a copy of the modified DOOM source code along with the original shareware WAD.
 
