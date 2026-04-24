@@ -3,13 +3,14 @@
 SRC_DIR = RTL
 SIM_DIR = ./sim/
 BUILD_DIR = build/
+SYNTH_DIR = synth/
 SYNTH_OUT = $(BUILD_DIR)synth.json
 SYNTH_REPORT = $(BUILD_DIR)synth_report.txt
 PNR_OUT = $(BUILD_DIR)pnr.json
 PNR_REPORT = $(BUILD_DIR)pnr_report.txt
 BITSTREAM = $(BUILD_DIR)bitstream.fs
-CST = tangnano20k.cst
-SDC = timing.sdc
+CST = $(SYNTH_DIR)tangnano20k.cst
+SDC = $(SYNTH_DIR)timing.sdc
 
 # Sources (all .sv files in RTL/ recursive)
 SRC = $(shell find $(SRC_DIR) -type f -name '*.sv')
@@ -126,7 +127,7 @@ clean:
 .PHONY: sim waves
 
 sim:
-	cd $(SIM_DIR) && python3 sim.py
+	cd $(SIM_DIR) && python3 test_core.py
 
 waves2:
 	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)
