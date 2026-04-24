@@ -6,7 +6,7 @@ module palette (
 
     // TODO write port for palette changes
 
-    logic [23:0] rom [255:0];
+    logic [23:0] rom [0:255];
 
     initial begin
         $readmemh("default_palette.txt", rom);

@@ -1,7 +1,7 @@
 # FPGA build Makefile for tangnano20k (GW2A-18C)
 
-FMAX = 100
 SRC_DIR = RTL
+SIM_DIR = ./sim/
 BUILD_DIR = build/
 SYNTH_OUT = $(BUILD_DIR)synth.json
 SYNTH_REPORT = $(BUILD_DIR)synth_report.txt
@@ -25,6 +25,10 @@ NEXTPNR = source /opt/oss-cad-suite/environment && nextpnr-himbaechel
 GOWIN_PACK = source /opt/oss-cad-suite/environment && gowin_pack
 OPENFPGALOADER = source /opt/oss-cad-suite/environment && openFPGALoader
 
+
+##################
+### FPGA BUILD ###
+##################
 
 .PHONY: all clean flash flash_persist synth pnr asm
 
@@ -67,8 +71,13 @@ $(SYNTH_OUT): $(SRC) | $(BUILD_DIR)
 	@echo "========================================"
 	@echo "Running synthesis..."
 	@echo "========================================"
-	$(YOSYS) -l $(SYNTH_REPORT) -m slang -p "read_verilog -sv RTL/uncore/video/frame_buffer.sv RTL/uncore/video/palette.sv; read_slang --ignore-unknown-modules --keep-hierarchy $(filter-out RTL/uncore/video/frame_buffer.sv RTL/uncore/video/palette.sv, $(SRC)); synth_gowin -top top -json $(SYNTH_OUT)"
+#	$(YOSYS) -l $(SYNTH_REPORT) -m slang -p "read_verilog -sv RTL/uncore/video/frame_buffer.sv RTL/uncore/video/palette.sv; read_slang --ignore-unknown-modules --keep-hierarchy $(filter-out RTL/uncore/video/frame_buffer.sv RTL/uncore/video/palette.sv, $(SRC)); synth_gowin -top top -json $(SYNTH_OUT)"
 #	$(YOSYS) -l $(SYNTH_REPORT) -m slang -p "read_slang --keep-hierarchy $(SRC); synth_gowin -top top -json $(SYNTH_OUT)"
+	$(YOSYS) -l $(SYNTH_REPORT) -m slang -p "\
+		read_verilog -sv RTL/uncore/video/frame_buffer.sv RTL/uncore/video/palette.sv; \
+		read_slang --keep-hierarchy $(filter-out RTL/uncore/video/frame_buffer.sv RTL/uncore/video/palette.sv, $(SRC)); \
+		synth_gowin -top top -json $(SYNTH_OUT); \
+	"
 	@printf "\nSynthesis Warnings:\n"
 	@grep -i "warning" $(SYNTH_REPORT) || true
 
@@ -103,3 +112,25 @@ asm: $(BITSTREAM)
 #---------------------------------------------------------------------
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -rf $(SIM_DIR)sim_build
+	rm -rf $(SIM_DIR)__pycache__
+	rm -f $(SIM_DIR)results.xml
+
+
+
+##################
+### SIMULATION ###
+##################
+
+.PHONY: sim waves
+
+sim:
+	cd $(SIM_DIR) && python3 sim.py
+
+waves2:
+	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)
+	surfer -s $(SIM_DIR)system_state.surf.ron $(SIM_DIR)sim_build/dump.fst
+
+waves:
+	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)
+	surfer -s $(SIM_DIR)state.surf.ron $(SIM_DIR)sim_build/dump.fst

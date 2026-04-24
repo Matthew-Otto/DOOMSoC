@@ -2,7 +2,7 @@
 // Optionally outputs a single (fast_clk) cycle pulse per button press if PULSE is enabled
 
 module debounce #(
-    parameter int CLK_FREQ = 50000000,
+    parameter int CLK_FREQ = -1,
     parameter logic PULSE = 0
 ) (
     input  logic clk,

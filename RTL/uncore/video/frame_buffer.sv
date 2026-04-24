@@ -8,7 +8,7 @@ module frame_buffer (
 
     // static image for now
 
-    logic [7:0] rom [65535:0];
+    logic [7:0] rom [0:65535];
 
     initial begin
         $readmemh("frame_buffer.hex", rom);
