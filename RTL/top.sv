@@ -32,20 +32,21 @@ module top (
     output logic [5:0] led
 );
 
+
     ////////////////////////////////////////////////////////////////////////
-    //// clocks ////////////////////////////////////////////////////////////
+    //// Clocks ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic sys_clk;   // main system clock
-    logic sdram_clk; // sdram clock
+    logic core_clk;   // main system clock
+    logic bus_clk; // sdram clock
     logic p_clk;     // HDMI pixel clock
     logic s_clk;     // HDMI serializer clock (10 bit / p_clk) (DDR)
 
-    localparam SYS_CLOCK_FREQ = 329_400_000;
-    localparam MEM_CLK_FREQ = 164_700_000;
+    localparam CORE_CLK_FREQ = 329_400_000;
+    localparam BUS_CLK_FREQ = 164_700_000;
 
-    //// System Clock
 `ifndef VERILATOR
+    //// System Clock Generator
     rPLL #(
         .FCLKIN("27.0"),
         .IDIV_SEL(4),   // -> PFD = 5.4 MHz (range: 3-500 MHz)
@@ -65,21 +66,21 @@ module top (
         .DUTYDA(4'b0),
         .FDLY(4'b0),
         .CLKIN(clk),      // 27.0 MHz
-        .CLKOUT(sys_clk), // 329.4 MHz
+        .CLKOUT(core_clk), // 329.4 MHz
         .LOCK()
     );
 
-    //// SDRAM clock generator
+    //// SDRAM Clock Generator
     CLKDIV #(
         .DIV_MODE("2")
-    ) sdram_clk_div_i (
-        .HCLKIN(sys_clk),
+    ) bus_clk_div_i (
+        .HCLKIN(core_clk),
         .RESETN(1'b1),
         .CALIB(1'b0),
-        .CLKOUT(sdram_clk) // 164.7 MHz
+        .CLKOUT(bus_clk) // 164.7 MHz
     );
 
-    //// Serial clock generator
+    //// Serial Clock Generator
     rPLL #(
         .FCLKIN("27.0"),
         .IDIV_SEL(2),   // -> PFD = 9.0 MHz (range: 3-500 MHz)
@@ -103,7 +104,7 @@ module top (
         .LOCK()
     );
 
-    //// Pixel clock generator
+    //// Pixel Clock Generator
     CLKDIV #(
         .DIV_MODE("5")
     ) pclk_div_i (
@@ -114,91 +115,158 @@ module top (
     );
 `endif
 
+
+
     ////////////////////////////////////////////////////////////////////////
-    //// user IO ///////////////////////////////////////////////////////////
+    //// User IO ///////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
     logic btn1_db;
 
 `ifndef VERILATOR
     debounce #(
-        .CLK_FREQ(SYS_CLOCK_FREQ),
+        .CLK_FREQ(CORE_CLK_FREQ),
         .PULSE(1)
     ) db_1 (
-        .clk(sys_clk),
+        .clk(core_clk),
         .db_in(btn1),
         .db_out(btn1_db)
     );
 `endif
 
+
+
     ////////////////////////////////////////////////////////////////////////
-    //// reset /////////////////////////////////////////////////////////////
+    //// Reset /////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
     logic reset_i;
-    logic main_reset;
-    logic main_reset_long;
-    logic sys_reset;
-    logic sdram_reset;
+    logic reset_agg;
+    logic reset;
 
     init_rst init_rst_i (
-        .clk(sys_clk),
+        .clk(core_clk),
         .reset(reset_i)
     );
 
-    assign main_reset = reset_i | btn1_db;
+    assign reset_agg = reset_i | btn1_db;
 
     pulse_stretcher #(
         .FACTOR(2)
     ) reset_smear (
-        .clk(sys_clk),
-        .pulse_in(main_reset),
-        .pulse_out(main_reset_long)
+        .clk(core_clk),
+        .pulse_in(reset_agg),
+        .pulse_out(reset)
     );
 
 
-    assign sys_reset = main_reset_long;
 
+    ////////////////////////////////////////////////////////////////////////
+    //// Memory Bus ////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+    
+    `include "uncore/memory_bus/typedef.svh"
+    `include "uncore/memory_bus/assign.svh"
 
-    reset_sync sdram_reset_sync (
-        .clk(sdram_clk),
-        .async_reset(main_reset_long),
-        .sync_reset(sdram_reset)
+    localparam int AXI_ADDR_WIDTH = 32;
+    localparam int AXI_DATA_WIDTH = 32;
+    localparam int AXI_ID_WIDTH   = 4;
+    localparam int AXI_USER_WIDTH = 0;
+
+    // Generate AXI types using PULP macros
+    `AXI_TYPEDEF_ALL(axi_bus, logic [AXI_ADDR_WIDTH-1:0], logic [AXI_ID_WIDTH-1:0], logic [AXI_DATA_WIDTH-1:0], logic [(AXI_DATA_WIDTH/8)-1:0], logic [AXI_USER_WIDTH-1:0])
+
+    localparam axi_pkg::xbar_cfg_t XbarCfg = '{
+        NoSlvPorts:         3, // 3 Masters
+        NoMstPorts:         4, // 4 Slaves
+        MaxMstTrans:        4, // Max outstanding transactions
+        MaxSlvTrans:        4,
+        FallThrough:        1'b0,
+        LatencyMode:        axi_pkg::CUT_ALL_PORTS, // Adds registers to ease timing
+        PipelineStages:     32'd1,
+        AxiIdWidthSlvPorts: AXI_ID_WIDTH,
+        AxiIdUsedSlvPorts:  AXI_ID_WIDTH,
+        UniqueIds:          1'b0,
+        AxiAddrWidth:       AXI_ADDR_WIDTH,
+        AxiDataWidth:       AXI_DATA_WIDTH,
+        NoAddrRules:        4  // One rule per slave
+    };
+
+    // Define Address Routing Map
+    typedef axi_pkg::xbar_rule_32_t rule_t; // 32-bit address rules
+    rule_t [XbarCfg.NoSlvPorts-1:0][XbarCfg.NoAddrRules-1:0] addr_map;
+
+    // Define the base memory map
+    localparam rule_t [XbarCfg.NoAddrRules-1:0] BASE_MAP = '{
+        '{idx: 3'd0, start_addr: 32'h0000_0000, end_addr: 32'h007F_FFFF}, // Slave 0 (SDRAM Controller)
+        '{idx: 3'd1, start_addr: 32'h1000_0000, end_addr: 32'h1000_FFFF}, // Slave 1 (Boot ROM)
+        '{idx: 3'd2, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}, // Slave 2 (Frame Buffer)
+        '{idx: 3'd3, start_addr: 32'h8000_0000, end_addr: 32'h8000_FFFF}  // Slave 3 (SD Card Interface)
+    };
+
+    // Apply the memory map to all 3 masters so they can all see the same peripherals
+    assign addr_map[0] = BASE_MAP;
+    assign addr_map[1] = BASE_MAP;
+    assign addr_map[2] = BASE_MAP;
+
+    AXI_BUS #(
+        .AXI_ADDR_WIDTH ( AXI_ADDR_WIDTH ),
+        .AXI_DATA_WIDTH ( AXI_DATA_WIDTH ),
+        .AXI_ID_WIDTH   ( AXI_ID_WIDTH   ),
+        .AXI_USER_WIDTH ( AXI_USER_WIDTH )
+    ) axi_slv_ports [XbarCfg.NoSlvPorts] ();
+
+    AXI_BUS #(
+        .AXI_ADDR_WIDTH ( AXI_ADDR_WIDTH ),
+        .AXI_DATA_WIDTH ( AXI_DATA_WIDTH ),
+        .AXI_ID_WIDTH   ( AXI_ID_WIDTH   ),
+        .AXI_USER_WIDTH ( AXI_USER_WIDTH )
+    ) axi_mst_ports [XbarCfg.NoMstPorts] ();
+
+    axi_xbar_intf #(
+        .AXI_USER_WIDTH ( AXI_USER_WIDTH ),
+        .Cfg            ( XbarCfg        ),
+        .rule_t         ( rule_t         )
+    ) i_axi_xbar (
+        .clk_i                 ( bus_clk       ),
+        .rst_ni                ( ~reset        ),
+        .test_i                ( 1'b0          ),
+        .slv_ports             ( axi_slv_ports ),
+        .mst_ports             ( axi_mst_ports ),
+        .addr_map_i            ( addr_map      ),
+        .en_default_mst_port_i ( 1'b0          ), 
+        .default_mst_port_i    ( '0            )
     );
 
-    // one_bit_synchro sdram_reset_sync (
-    //     .clk(sdram_clk),
-    //     .data_in(sys_reset),
-    //     .data_out(sdram_reset)
-    // );
-
-
-    // BOZO DEBUG
-    logic test1;
-    logic test2;
-    always_ff @(posedge sys_clk)
-        if (sys_reset)
-            test1 <= ~test1;
-    assign led[2] = test1;
-
-    always_ff @(posedge sdram_clk)
-        if (sdram_reset)
-            test2 <= ~test2;
-    assign led[4] = test2;
 
 
     ////////////////////////////////////////////////////////////////////////
-    //// display ///////////////////////////////////////////////////////////
+    //// CPU ///////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    display_driver display_driver_i (
-        .p_clk,
-        .s_clk,
-        .reset(sys_reset),
-        .serial_pclk(tmds_clk_p),
-        .serial_blue(tmds_d0_p),
-        .serial_green(tmds_d1_p),
-        .serial_red(tmds_d2_p)
+    core cpu (
+        .clk(core_clk),
+        .rst(reset),
+        .icache_port(axi_slv_ports[0]),
+        .d_addr(),
+        .d_we(),
+        .d_wr_data(),
+        .d_rd_data()
+    );
+
+
+
+    ////////////////////////////////////////////////////////////////////////
+    //// Bootloader ROM ////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+
+    axi4_boot_rom #(
+        .LOG_SIZE(10),
+        .INIT_FILE("bootloader.mem")
+    ) bootloader_i (
+        .clk(bus_clk),
+        .reset,
+        .s_axi(axi_mst_ports[0])
     );
 
 
@@ -217,13 +285,11 @@ module top (
     logic [31:0] read_data;
     logic        read_data_val;
 
-
-
     sdram_controller #(
-        .MEM_CLK_FREQ(MEM_CLK_FREQ)
+        .MEM_CLK_FREQ(BUS_CLK_FREQ)
     ) mem_controller_i (
-        .mem_clk(sdram_clk),
-        .reset(1'b0), // BOZO
+        .mem_clk(bus_clk),
+        .reset,
         .cmd_ready,
         .stop,
         .read,
@@ -245,167 +311,35 @@ module top (
         .O_sdram_dqm
     );
 
-    // core cpu (
-    //     .clk(sys_clk),
-    //     .rst(sys_reset),
-    //     .i_addr(),
-    //     .i_rd_data(),
-    //     .d_addr(),
-    //     .d_we(),
-    //     .d_wr_data(),
-    //     .d_rd_data()
-    // );
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////
 
-    logic btn2_db;
-`ifndef VERILATOR
-    debounce #(
-        .CLK_FREQ(MEM_CLK_FREQ),
-        .PULSE(1)
-    ) db_2 (
-        .clk(sdram_clk),
-        .db_in(btn2),
-        .db_out(btn2_db)
+    ////////////////////////////////////////////////////////////////////////
+    //// Display ///////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+
+    display_driver display_driver_i (
+        .p_clk,
+        .s_clk,
+        .reset(reset),
+        .serial_pclk(tmds_clk_p),
+        .serial_blue(tmds_d0_p),
+        .serial_green(tmds_d1_p),
+        .serial_red(tmds_d2_p)
     );
-`endif
-
-    logic done;
-    logic test_busy;
-    logic test_pass;
-    logic test_fail;
-
-    assign led[1] = ~btn2;
-
-    assign led[5] = ~test_pass;
-    assign led[3] = ~test_fail;
-    assign led[0] = ~test_busy;
-
-    logic [31:0] lfsr;
-    logic lfsr_feedback;
-
-    assign lfsr_feedback = lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0];
-    assign write_data = lfsr;
-
-    enum {
-        IDLE,
-        WRITE,
-        WRITE_BURST,
-        READ,
-        READ_BURST
-    } mt_state;
-
-    logic [31:0] counter;
-    logic [3:0] burst_len;
-
-    localparam MAX_ADDR = 1 << 10; // 1 << 21;
-
-    assign addr = counter;
-
-    always_ff @(posedge sdram_clk) begin
-        if (sdram_reset) begin
-            mt_state <= IDLE;
-            counter <= 0;
-
-            write <= 0;
-            read <= 0;
-            done <= 0;
-        end else begin
-            case (mt_state)
-                IDLE : begin
-                    if (btn2_db) begin
-                        mt_state <= WRITE;
-                        write <= 1;
-                        write_strb <= 4'hf;
-                    end
-                end
-
-                WRITE : begin
-                    if (cmd_ready) begin
-                        mt_state <= WRITE_BURST;
-                        burst_len <= 6;
-                    end
-                end
-
-                WRITE_BURST : begin
-                    if (burst_len == 0) begin
-                        if ((counter + 32) >= MAX_ADDR) begin
-                            counter <= 0;
-                            mt_state <= READ;
-                            write <= 0;
-                            read <= 1;
-                        end else begin
-                            mt_state <= WRITE;
-                            counter <= counter + 32;
-                        end
-                    end else begin
-                        burst_len <= burst_len - 1;
-                    end
-                end
-
-                READ : begin
-                    if (cmd_ready) begin
-                        mt_state <= READ_BURST;
-                        burst_len <= 6;
-                    end
-                end
-
-                READ_BURST : begin
-                    if (burst_len == 0) begin
-                        if ((counter + 32) >= MAX_ADDR) begin
-                            counter <= 0;
-                            mt_state <= IDLE;
-                            read <= 0;
-                            done <= 1;
-                        end else begin
-                            mt_state <= READ;
-                            counter <= counter + 32;
-                        end
-                    end else begin
-                        burst_len <= burst_len - 1;
-                    end
-                end
-
-                default : begin
-                    mt_state <= IDLE;
-                end
-            endcase
-        end
-    end
 
 
-    always_ff @(posedge sdram_clk) begin
-        if (sdram_reset || (mt_state == READ && counter == 0)) begin
-            lfsr <= 32'h12345678; 
-        end else if ((mt_state == WRITE && cmd_ready) || mt_state == WRITE_BURST) begin
-            lfsr <= {lfsr[30:0], lfsr_feedback};
-        end else if (read_data_val) begin
-            lfsr <= {lfsr[30:0], lfsr_feedback};
-        end
-    end
 
-    always_ff @(posedge sdram_clk) begin
-        if (sdram_reset) begin
-            test_busy <= 0;
-        end else if (btn2_db) begin
-            test_busy <= 1;
-        end
+    ////////////////////////////////////////////////////////////////////////
+    //// SD Card Reader ////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
 
-        if (sdram_reset) begin
-            test_pass <= 0;
-        end else if (done && ~test_fail) begin
-            test_pass <= 1;
-        end
 
-        if (sdram_reset) begin
-            test_fail <= 0;
-        end else if (read_data_val && (lfsr != read_data)) begin
-            test_fail <= 1;
-        end
-    end
+
+
+
+
+
+
+
 
 endmodule : top

@@ -3,9 +3,10 @@
 module core (
     input  logic        clk,
     input  logic        rst,
+
     // instruction port
-    output logic [31:0] i_addr,
-    input  logic [31:0] i_rd_data,
+    AXI_BUS.Master      icache_port,
+
     // data port
     output logic [31:0] d_addr,
     output logic [3:0]  d_we,
@@ -45,6 +46,10 @@ module core (
     logic        is_jump_op;
     logic        take_branch;
     
+
+    logic [31:0] i_addr;
+    logic [31:0] i_data;
+    logic        i_data_val; // BOZO TODO stall core on cache miss
     
     // data
     logic        we;
@@ -79,6 +84,15 @@ module core (
         .ld_en
     );
 
+    icache icache (
+        .clk,
+        .rst,
+        .core_addr(i_addr),
+        .core_read(i_data),
+        .core_read_valid(i_data_val),
+        .m_axi(icache_port)
+    );
+
     // PC calc / front-end
     fetch fetch_i (
         .clk,
@@ -99,7 +113,7 @@ module core (
 
     // Decode
     decode decode_i (
-        .instr(i_rd_data),
+        .instr(i_data),
         .rd(dec_rd),
         .rs1_addr,
         .rs2_addr,

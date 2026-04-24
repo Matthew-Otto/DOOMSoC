@@ -3,10 +3,10 @@
 create_clock -name clk -period 37.037 [get_ports {clk}]
 
 # System Clock
-create_clock -name sys_clk -period 3.036 [get_nets {sys_clk}]
+create_clock -name core_clk -period 3.036 [get_nets {core_clk}]
 
 # SDRAM CLock
-create_clock -name sdram_clk -period 6.072 [get_nets {sdram_clk}]
+create_clock -name bus_clk -period 6.072 [get_nets {bus_clk}]
 
 
 # HDMI Serializer Clock (s_clk): 126.0 MHz 
