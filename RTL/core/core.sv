@@ -71,7 +71,7 @@ module core (
 
 
 
-    control control_i (
+    control control_unit (
         .flush,
         .is_writeback,
         .ld_valid,
@@ -85,7 +85,7 @@ module core (
 
 
     // PC calc / front-end
-    fetch fetch_i (
+    fetch fetch_unit (
         .core_clk,
         .bus_clk,
         .rst,
@@ -99,8 +99,10 @@ module core (
         .icache_port
     );
 
+    assign ready_EX = 1'b1; // BOZO TODO backpressure (from LS?)
+
     // Decode
-    decode decode_i (
+    decode decode_unit (
         .instr(instr_EX),
         .rd_addr(dec_rd_addr),
         .rs1_addr,
@@ -129,7 +131,7 @@ module core (
     );
 
     // execution unit
-    EXU EXU_i (
+    EXU execution_unit (
         .alu_op,
         .is_imm,
         .is_store_op,
@@ -149,7 +151,8 @@ module core (
     );
 
     // branch unit
-    BRU BRU_i (
+    BRU branch_unit (
+        .valid(valid_EX),
         .PC(PC_EX),
         .is_ctrl_op,
         .br_type,
@@ -176,7 +179,7 @@ module core (
     );
 
     // load / store
-    LSU LSU_i (
+    LSU loadstore_unit (
         .clk(core_clk),
         .rst,
         .st_en,

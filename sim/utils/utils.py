@@ -23,6 +23,42 @@ async def reset_dut(clk, rst, active_low=False):
 
 
 
+# measure sim speed
+import time
+from cocotb.triggers import RisingEdge
+from cocotb.utils import get_sim_time
+
+async def log_sim_speed(dut, clk, sample_period=10000):
+    """
+    Call this at the start of the test:
+    cocotb.start_soon(log_sim_speed(dut, clk))
+    """
+    # measure clock period
+    start_time = time.perf_counter()
+    await ClockCycles(clk, 2)
+    cycle_period_fs = get_sim_time("fs")
+    
+    try:
+        period_start = start_time
+        while True:
+            await ClockCycles(clk, sample_period)
+            cycles = sample_period
+            
+            elapsed_real_time = time.perf_counter() - period_start
+            period_start = time.perf_counter()
+
+            speed = cycles / elapsed_real_time
+                
+            dut._log.info(f"Sim Speed: {speed:,.0f} cycles / second")
+    finally:
+        test_duration = time.perf_counter() - start_time
+        cycle_count = get_sim_time("fs") / cycle_period_fs
+        cycles_per_second = cycle_count / test_duration
+        dut._log.info(f"Total Average Sim Speed: {cycles_per_second:,.0f} cycles / second")
+
+
+            
+
 ### core bringup ########################
 
 def read_word(memory, addr):
@@ -44,41 +80,37 @@ async def sim_instr_mem(dut, clk ,memory):
             dut._log.debug(f"Fetched 0x{data:08X} from address 0x{addr:08X}")
 
 
+
 async def sim_data_mem(dut, clk, memory):
-    # drive memory
-    rd_addr = 0
+    d_addr        = dut.d_addr
+    d_we          = dut.d_we
+    d_wr_data_hdl = dut.d_wr_data
+    d_rd_data_hdl = dut.d_rd_data
+    is_load_hdl   = dut.cpu.loadstore_unit.is_load_op
+    
     while True:
         await RisingEdge(clk)
-        
-        # write
-        wr_addr = int(dut.d_addr.value)
-        data = 0
-        width = 0
-        if dut.d_we.value[0]:
-            memory[wr_addr] = int(dut.d_wr_data.value[7:0])
-            data |= int(dut.d_wr_data.value[7:0])
-            width = 8
-        if dut.d_we.value[1]:
-            memory[wr_addr+1] = int(dut.d_wr_data.value[15:8])
-            data |= int(dut.d_wr_data.value[15:8]) << 8
-            width = 16
-        if dut.d_we.value[2]:
-            memory[wr_addr+2] = int(dut.d_wr_data.value[23:16])
-            data |= int(dut.d_wr_data.value[23:16]) << 16
-            width = 24
-        if dut.d_we.value[3]:
-            memory[wr_addr+3] = int(dut.d_wr_data.value[31:24])
-            data |= int(dut.d_wr_data.value[31:24]) << 24
-            width = 32
-        if dut.d_we.value:
-            dut._log.debug(f"WRITE mem: {width} bits: addr=0x{wr_addr:08X} data=0x{data:08X}")
-        
-        # read
-        if dut.cpu.LSU_i.is_load_op.value:
-            rd_addr = int(dut.d_addr.value)
+        we = int(d_we.value)
+        if we:
+            wr_addr = int(d_addr.value)
+            wr_data = int(d_wr_data_hdl.value)
+            
+            if we & 0b0001: memory[wr_addr]     = wr_data & 0xFF
+            if we & 0b0010: memory[wr_addr + 1] = (wr_data >> 8) & 0xFF
+            if we & 0b0100: memory[wr_addr + 2] = (wr_data >> 16) & 0xFF
+            if we & 0b1000: memory[wr_addr + 3] = (wr_data >> 24) & 0xFF
+                
+            dut._log.debug("WRITE mem: addr=0x%08X data=0x%08X (we=0x%X)", wr_addr, wr_data, we)
+
+        # Read logic
+        if is_load_hdl.value == 1:
+            rd_addr = int(d_addr.value)
             data = read_word(memory, rd_addr)
-            dut.d_rd_data.value = data
-            dut._log.debug(f"READ mem: addr=0x{rd_addr:08X} data=0x{data:08X}")
+            d_rd_data_hdl.value = data
+            
+            dut._log.debug("READ mem: addr=0x%08X data=0x%08X", rd_addr, data)
+
+
         
 def parse_verilog_hex(filename):
     memory = {}

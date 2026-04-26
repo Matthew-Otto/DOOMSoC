@@ -18,11 +18,11 @@ from cocotbext.axi.sparse_memory import SparseMemory
 
 
 tohost = 0x90000000
-max_run_cycles = 1000
+max_run_cycles = 100000
 
 @cocotb.test()
 async def test_core(dut):
-    setup_file_logger(dut._log, "DEBUG")
+    setup_file_logger(dut._log, "INFO")
 
     benchmarks = os.path.join(os.getcwd(), "../../benchmarks/bin")
 
@@ -59,6 +59,7 @@ async def test_core(dut):
 
         dmem = cocotb.start_soon(sim_data_mem(dut, busclk, mem))
 
+        cocotb.start_soon(log_sim_speed(dut, clk))
         await reset_dut(clk, reset)
         
 
@@ -95,6 +96,8 @@ def test_runner():
             "-Wno-WIDTH",
             "--trace-fst",
             "--trace-structs",
+            "--threads", "1",
+            "--trace-threads", "1",
         ],
     )
 

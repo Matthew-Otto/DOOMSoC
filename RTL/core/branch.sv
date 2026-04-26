@@ -4,6 +4,7 @@
 `include "defines.svh"
 
 module BRU (
+    input  logic        valid,
     input  logic [31:0] PC,
     input  logic        is_ctrl_op,
     input  comp_t       comp_op,
@@ -54,6 +55,6 @@ module BRU (
         endcase
     end
 
-    assign branch = is_ctrl_op && (branch_eval || is_jump_op);
+    assign branch = valid && is_ctrl_op && (branch_eval || is_jump_op);
 
 endmodule : BRU
