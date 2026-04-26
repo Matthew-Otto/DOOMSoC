@@ -17,10 +17,10 @@ module EXU (
     input  logic [31:0] imm_u,
     input  logic [31:0] imm_s,
     input  logic [31:0] PC,
-    output logic [31:0] rd_data,
-    output logic        branch
+    output logic [31:0] rd_data
 );
 
+    // BOZO TODO SET LESS THAN instructions
     logic eq;
     logic lt;
     logic ltu;
@@ -57,6 +57,7 @@ module EXU (
     assign ltu = $unsigned(operand_a) < $unsigned(operand_b);
     assign geu = ~ltu;
 
+    // BOZO non branch comp ops
     always_comb begin : comparator
         case (comp_op)
             c_BEQ  : comp_out = eq;
@@ -114,8 +115,6 @@ module EXU (
         else
             multiplier_out = full_product[63:32];
     end
-
-    assign branch = comp_out;
 
     always_comb begin : out_mux
         case (alu_op)

@@ -1,7 +1,8 @@
 `include "defines.svh"
 
 module core (
-    input  logic        clk,
+    input  logic        core_clk,
+    input  logic        bus_clk,
     input  logic        rst,
 
     // instruction port
@@ -15,15 +16,12 @@ module core (
 );
 
     // control
-    logic [31:0] PC;     // current PC
-    logic [31:0] PC_p4;  // next PC
     logic        flush;
-    logic        fetch_stall;
     logic        st_en;
     logic        ld_en;
 
     logic [4:0]  ld_rd;
-    logic [4:0]  dec_rd;
+    logic [4:0]  dec_rd_addr;
     logic        is_writeback;
     
     alu_op_t     alu_op;
@@ -41,16 +39,18 @@ module core (
     store_op_t   store_op;
     logic        ld_valid;
     
-    logic        is_br_type;
+    logic        is_ctrl_op;
     br_type_t    br_type;
     logic        is_jump_op;
-    logic        take_branch;
+    logic        branch;
+    logic [31:0] branch_target;
     
-
-    logic [31:0] i_addr;
-    logic [31:0] i_data;
-    logic        i_data_val; // BOZO TODO stall core on cache miss
-    
+    // fetch
+    logic        ready_EX;
+    logic        valid_EX;
+    logic [31:0] instr_EX;
+    logic [31:0] PC_EX;
+ 
     // data
     logic        we;
     logic [4:0]  rd_addr;
@@ -78,43 +78,31 @@ module core (
         .rs1_addr,
         .rs2_addr,
         .ld_rd,
-        .fetch_stall,
         .reg_we(we),
         .st_en,
         .ld_en
     );
 
-    icache icache (
-        .clk,
-        .rst,
-        .core_addr(i_addr),
-        .core_read(i_data),
-        .core_read_valid(i_data_val),
-        .m_axi(icache_port)
-    );
 
     // PC calc / front-end
     fetch fetch_i (
-        .clk,
+        .core_clk,
+        .bus_clk,
         .rst,
-        .fetch_stall,
-        .is_br_type,
-        .br_type,
-        .take_branch,
-        .rs1_data,
-        .imm_b,
-        .imm_i,
-        .imm_j,
-        .i_addr,
-        .PC_f(PC_p4),
-        .PC_e(PC),
-        .flush
+        .branch,
+        .branch_target,
+        .flush,
+        .ready(ready_EX),
+        .valid(valid_EX),
+        .instr(instr_EX),
+        .PC(PC_EX),
+        .icache_port
     );
 
     // Decode
     decode decode_i (
-        .instr(i_data),
-        .rd(dec_rd),
+        .instr(instr_EX),
+        .rd_addr(dec_rd_addr),
         .rs1_addr,
         .rs2_addr,
         .is_writeback,
@@ -129,7 +117,7 @@ module core (
         .load_op,
         .is_store_op,
         .store_op,
-        .is_br_type,
+        .is_ctrl_op,
         .br_type,
         .is_jump_op,
         .is_imm,
@@ -156,13 +144,28 @@ module core (
         .imm_i,
         .imm_u,
         .imm_s,
-        .PC,
-        .rd_data(alu_rd_data),
-        .branch(take_branch)
+        .PC(PC_EX),
+        .rd_data(alu_rd_data)
+    );
+
+    // branch unit
+    BRU BRU_i (
+        .PC(PC_EX),
+        .is_ctrl_op,
+        .br_type,
+        .comp_op,
+        .is_jump_op,
+        .rs1_data,
+        .rs2_data,
+        .imm_b,
+        .imm_i,
+        .imm_j,
+        .branch,
+        .branch_target
     );
 
     regfile regfile_i (
-        .clk,
+        .clk(core_clk),
         .we,
         .rd_addr,
         .rd_data,
@@ -174,11 +177,11 @@ module core (
 
     // load / store
     LSU LSU_i (
-        .clk,
+        .clk(core_clk),
         .rst,
         .st_en,
         .ld_en,
-        .rd(dec_rd),
+        .rd(dec_rd_addr),
         .addr(alu_rd_data),
         .is_load_op,
         .is_store_op,
@@ -194,12 +197,13 @@ module core (
         .d_rd_data
     );
 
-    assign rd_addr = ld_valid ? ld_rd : dec_rd;
+    // BOZO TODO couple writeback tighter into LSU
+    assign rd_addr = ld_valid ? ld_rd : dec_rd_addr;
 
     always_comb begin
         casez ({ld_valid,is_jump_op})
             2'b1? : rd_data = ld_rd_data;
-            2'b01 : rd_data = PC_p4;
+            //2'b01 : rd_data = PC_p4;
             default: rd_data = alu_rd_data;
         endcase
     end

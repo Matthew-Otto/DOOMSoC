@@ -5,7 +5,7 @@
 module decode (
     input  logic [31:0] instr,
 
-    output logic [4:0]  rd,
+    output logic [4:0]  rd_addr,
     output logic [4:0]  rs1_addr,
     output logic [4:0]  rs2_addr,
     output logic        is_writeback,
@@ -23,7 +23,7 @@ module decode (
     output logic        is_store_op,
     output store_op_t   store_op,
 
-    output logic        is_br_type,
+    output logic        is_ctrl_op,
     output br_type_t    br_type,
     output logic        is_jump_op,
 
@@ -44,7 +44,7 @@ module decode (
     assign funct3 = instr[14:12];
     assign funct7 = instr[31:25];
 
-    assign rd = instr[7+:5];
+    assign rd_addr = instr[7+:5];
     assign rs1_addr = instr[15+:5];
     assign rs2_addr = instr[20+:5];
 
@@ -94,9 +94,9 @@ module decode (
     assign shift_arith = funct7[5];
 
     // branch decode
-    assign is_br_type = ({op[4:2]} == 3'b110);
+    assign is_ctrl_op = ({op[4:2]} == 3'b110);
     assign br_type = br_type_t'(op[1:0]);
-    assign is_jump_op = is_br_type & op[0];
+    assign is_jump_op = is_ctrl_op & op[0];
 
     // load/store decode
     assign is_load_op = (op == 5'b00000);

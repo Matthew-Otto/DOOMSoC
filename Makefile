@@ -126,12 +126,12 @@ clean:
 
 .PHONY: sim waves
 
-sim:
+core_sim:
 	cd $(SIM_DIR) && python3 test_core.py
 
-waves2:
+core_waves:
 	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)
-	surfer -s $(SIM_DIR)system_state.surf.ron $(SIM_DIR)sim_build/dump.fst
+	surfer -s $(SIM_DIR)core_state.surf.ron $(SIM_DIR)sim_build/dump.fst
 
 waves:
 	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)

@@ -198,10 +198,10 @@ module top (
 
     // Define the base memory map
     localparam rule_t [XbarCfg.NoAddrRules-1:0] BASE_MAP = '{
-        '{idx: 3'd0, start_addr: 32'h0000_0000, end_addr: 32'h007F_FFFF}, // Slave 0 (SDRAM Controller)
-        '{idx: 3'd1, start_addr: 32'h1000_0000, end_addr: 32'h1000_FFFF}, // Slave 1 (Boot ROM)
-        '{idx: 3'd2, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}, // Slave 2 (Frame Buffer)
-        '{idx: 3'd3, start_addr: 32'h8000_0000, end_addr: 32'h8000_FFFF}  // Slave 3 (SD Card Interface)
+        '{idx: 3'd0, start_addr: 32'h8000_0000, end_addr: 32'h8000_FFFF}, // Slave 0 (Boot ROM)
+        '{idx: 3'd1, start_addr: 32'h0000_0000, end_addr: 32'h007F_FFFF}, // Slave 1 (SDRAM Controller)
+        '{idx: 3'd2, start_addr: 32'h1000_0000, end_addr: 32'h1000_FFFF}, // Slave 2 (Frame Buffer)
+        '{idx: 3'd3, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}  // Slave 3 (SD Card Interface)
     };
 
     // Apply the memory map to all 3 masters so they can all see the same peripherals
@@ -245,7 +245,8 @@ module top (
     ////////////////////////////////////////////////////////////////////////
 
     core cpu (
-        .clk(core_clk),
+        .core_clk,
+        .bus_clk,
         .rst(reset),
         .icache_port(axi_slv_ports[0]),
         .d_addr(),

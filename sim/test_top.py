@@ -5,17 +5,13 @@ from functools import partial
 from pathlib import Path
 from asyncio import Event
 
-from models.utils import setup_file_logger, reset_dut
+from utils.utils import setup_file_logger, reset_dut
 from models.sdram import SDRAM
 
 import cocotb
 from cocotb_tools.runner import get_runner
 from cocotb.clock import Clock
 from cocotb.triggers import Timer, ReadOnly, ReadWrite, ClockCycles, RisingEdge, FallingEdge
-from cocotb.queue import Queue
-from cocotbext.axi import AxiMaster, AxiLiteMaster
-from cocotbext.axi import AxiBus, AxiLiteBus, AxiLiteWriteBus, AxiLiteReadBus
-from cocotbext.axi import AxiRam
 
 
 
@@ -23,8 +19,8 @@ from cocotbext.axi import AxiRam
 async def test(dut):
     setup_file_logger(dut._log, "DEBUG")
 
-    clk = dut.sys_clk
-    memclk = dut.sdram_clk
+    clk = dut.core_clk
+    memclk = dut.mem_clk
     reset = dut.main_reset
 
     sys_clk_ns = round((1/329_400_000) * 1e12)
