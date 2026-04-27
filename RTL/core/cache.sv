@@ -82,34 +82,41 @@ module icache (
     ////////////////////////////////////////////////////////////////////////
     //// Tag store /////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic [19:0] tag_store [0:255]; // valid, tag
 
     assign tag_write_index = rst_active ? rst_idx : write_index;
     assign tag_write_data = rst_active ? '0 : {cacheline_filled,write_tag};
 
-    always_ff @(posedge core_clk) begin
-        if (write_en || rst_active)
-            tag_store[tag_write_index] <= tag_write_data;
+    dual_port_bram #(
+        .ADDR_WIDTH(8),
+        .DATA_WIDTH(20)
+    ) tag_store (
+        .clk(core_clk),
+        .rst(rst),
+        .wr_en(write_en || rst_active),
+        .write_addr(tag_write_index),
+        .write_data(tag_write_data),
+        .read_addr(index),
+        .read_data({valid_tag,tag_read})
+    );
 
-        if (rst)
-            {valid_tag,tag_read} <= '0;
-        else
-            {valid_tag,tag_read} <= (tag_write_index == index) ? tag_write_data : tag_store[index];
-    end
     assign tag_match = (tag == tag_read);
 
 
     ////////////////////////////////////////////////////////////////////////
     //// Data store ////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic [31:0] data_store [0:2047];
-
-    always_ff @(posedge core_clk) begin
-        if (write_en)
-            data_store[write_bram_addr] <= write_data;
-
-        core_instr <= (write_bram_addr == bram_addr) ? write_data : data_store[bram_addr];
-    end
+    dual_port_bram #(
+        .ADDR_WIDTH(11),
+        .DATA_WIDTH(32)
+    ) data_store (
+        .clk(core_clk),
+        .rst(rst),
+        .wr_en(write_en),
+        .write_addr(write_bram_addr),
+        .write_data(write_data),
+        .read_addr(bram_addr),
+        .read_data(core_instr)
+    );
 
     assign core_instr_val = valid_tag && tag_match;
 

@@ -249,10 +249,10 @@ module top (
         .bus_clk,
         .rst(reset),
         .icache_port(axi_slv_ports[0]),
-        .d_addr(),
-        .d_we(),
-        .d_wr_data(),
-        .d_rd_data()
+        .d_addr(led[2]),
+        .d_we(led[0]),
+        .d_wr_data(led[1]),
+        .d_rd_data(32'hdeadbeef)
     );
 
 
