@@ -9,7 +9,7 @@ module sdram_controller #(
     input  logic        read,
     input  logic        write,
     input  logic [3:0]  write_strb,
-    input  logic [22:0] addr,  // {bank[1:0], row[10:0], col[7:0], word[1:0](discarded)}
+    input  logic [20:0] addr,  // {bank[1:0], row[10:0], col[7:0]}
     input  logic [31:0] write_data,
     output logic [31:0] read_data,
     output logic        read_data_val,
@@ -212,7 +212,7 @@ module sdram_controller #(
     logic [7:0]  col_addr, latched_col_addr;
 
     assign latch_input = (state == IDLE) && (read || write);
-    assign {bank_addr,row_addr,col_addr} = addr[22:2];
+    assign {bank_addr,row_addr,col_addr} = addr;
 
     always_ff @(posedge mem_clk) begin
         if (reset) begin
