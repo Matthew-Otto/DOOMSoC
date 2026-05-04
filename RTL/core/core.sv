@@ -5,15 +5,12 @@ module core (
     input  logic        bus_clk,
     input  logic        rst,
 
-    output logic        bozo_debug,
-
     AXI_BUS.Master      icache_port,
     AXI_BUS.Master      dcache_port
 );
 
     // control
     logic        flush;
-    logic        stall;
 
     logic [4:0]  ld_rd_addr;
     logic        is_writeback;
@@ -40,7 +37,7 @@ module core (
     logic [31:0] branch_target;
     
     // fetch
-    logic        ready_EX;
+    logic        stall_EX;
     logic        valid_EX;
     logic [31:0] instr_EX;
     logic [31:0] PC_EX;
@@ -65,12 +62,7 @@ module core (
     logic [31:0] imm_j;
 
 
-    // BOZO DEBUG anti-opt
-    assign bozo_debug = ^rs1_data;
-
-
     control control_unit (
-        .flush,
         .is_writeback,
         .ld_valid,
         .rs1_addr,
@@ -86,8 +78,7 @@ module core (
         .rst,
         .branch,
         .branch_target,
-        .flush,
-        .ready(~stall),
+        .ready(~stall_EX),
         .valid(valid_EX),
         .instr(instr_EX),
         .PC(PC_EX),
@@ -179,8 +170,9 @@ module core (
         .core_clk,
         .bus_clk,
         .rst,
+        .valid(0), // BOZO TODO
         .flush,
-        .stall,
+        .stall(stall_EX),
         .is_load_op,
         .load_op,
         .is_store_op,

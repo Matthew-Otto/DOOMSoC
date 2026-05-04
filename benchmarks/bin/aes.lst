@@ -397,7 +397,7 @@ Disassembly of section .rodata:
 8000052a:	0804                	addi	s1,sp,16
 8000052c:	2010                	fld	fa2,0(s0)
 8000052e:	8040                	0x8040
-80000530:	          	0x361b
+80000530:	0000361b          	0x361b
 
 Disassembly of section .data:
 

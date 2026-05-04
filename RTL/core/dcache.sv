@@ -152,7 +152,7 @@ module dcache (
     assign read_tag_miss = pending_read && ~tag_hit;
 
     assign core_rdy = ~(rst_active || read_tag_miss || pending_fill);
-    //assign core_rdy = //BOZO TODO
+    //assign core_rdy = //BOZO TODO read ready (pending write in progress)
     assign core_read_data_val = tag_hit;
 
 

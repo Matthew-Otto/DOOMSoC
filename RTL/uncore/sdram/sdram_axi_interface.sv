@@ -9,7 +9,9 @@
 
 
 module sdram_axi_interface #(
-    parameter int MEM_CLK_FREQ
+    parameter int MEM_CLK_FREQ,
+    parameter int DATA_WIDTH   = 32,
+    parameter int ID_WIDTH     = 1
 ) (
     input  logic        mem_clk,
     input  logic        reset,
@@ -28,14 +30,16 @@ module sdram_axi_interface #(
     output logic [3:0]  O_sdram_dqm       // data mask
 );
 
+    // BOZO TODO loopback wid and rid
+
     logic        stop;
     logic        read;
     logic        write;
     logic [3:0]  write_strb;
     logic [20:0] addr;
     logic        cmd_ready;
-    logic [31:0] write_data;
-    logic [31:0] read_data;
+    logic [DATA_WIDTH-1:0] write_data;
+    logic [DATA_WIDTH-1:0] read_data;
     logic        read_data_val;
 
 
@@ -78,7 +82,6 @@ module sdram_axi_interface #(
         s_axi.aw_ready = 1'b0;
         s_axi.ar_ready = 1'b0;
         s_axi.w_ready  = 1'b0;
-        s_axi.b_valid  = 1'b0;
         s_axi.r_valid  = 1'b0;
         s_axi.r_last   = 1'b0;
 

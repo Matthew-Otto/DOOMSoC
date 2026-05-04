@@ -62,8 +62,6 @@ module decode (
             9'b0?100_000_0 : alu_op = ADDER_OP;
             9'b0?100_01?_0 : alu_op = COMP_OP;
             9'b01100_???_1 : alu_op = MUL_OP;
-            9'b0?100_010_0,
-            9'b0?100_011_0,
             9'b0?100_100_0 : alu_op = XOR_OP;
             9'b0?100_110_0 : alu_op = OR_OP;
             9'b0?100_111_0 : alu_op = AND_OP;

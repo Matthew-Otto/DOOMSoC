@@ -50,7 +50,7 @@ $(BIN_DIR)/%.elf: $(BIN_DIR)/%.o $(BIN_DIR)/crt0.o
 
 # Convert ELF to Verilog hex
 $(BIN_DIR)/%.hex: $(BIN_DIR)/%.elf
-	$(OBJCOPY) -O verilog $< $@
+	$(OBJCOPY) -O verilog --verilog-data-width=4 --reverse-bytes=4 -R .riscv.attributes $< $@
 
 # generate readable disassembly
 $(BIN_DIR)/%.lst: $(BIN_DIR)/%.elf

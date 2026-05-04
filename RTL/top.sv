@@ -171,70 +171,68 @@ module top (
     localparam int AXI_ADDR_WIDTH = 32;
     localparam int AXI_DATA_WIDTH = 32;
     localparam int AXI_ID_WIDTH   = 4;
-    localparam int AXI_USER_WIDTH = 0;
+    localparam int AXI_USER_WIDTH = 1;
 
     // Generate AXI types using PULP macros
     `AXI_TYPEDEF_ALL(axi_bus, logic [AXI_ADDR_WIDTH-1:0], logic [AXI_ID_WIDTH-1:0], logic [AXI_DATA_WIDTH-1:0], logic [(AXI_DATA_WIDTH/8)-1:0], logic [AXI_USER_WIDTH-1:0])
 
     localparam axi_pkg::xbar_cfg_t XbarCfg = '{
         NoSlvPorts:         2, // 2 Masters
-        NoMstPorts:         4, // 4 Slaves
-        MaxMstTrans:        4, // Max outstanding transactions
-        MaxSlvTrans:        4,
+        NoMstPorts:         2, // 4 Slaves // BOZO 4
+        MaxMstTrans:        1, // Max outstanding transactions
+        MaxSlvTrans:        1,
         FallThrough:        1'b0,
-        LatencyMode:        axi_pkg::CUT_ALL_PORTS, // Adds registers to ease timing
+        LatencyMode:        axi_pkg::CUT_ALL_AX,
         PipelineStages:     32'd1,
         AxiIdWidthSlvPorts: AXI_ID_WIDTH,
         AxiIdUsedSlvPorts:  AXI_ID_WIDTH,
         UniqueIds:          1'b0,
         AxiAddrWidth:       AXI_ADDR_WIDTH,
         AxiDataWidth:       AXI_DATA_WIDTH,
-        NoAddrRules:        4  // One rule per slave
+        NoAddrRules:        2  // One rule per slave // BOZO 4
     };
+
+    localparam int AXI_MST_ID_WIDTH = AXI_ID_WIDTH + $clog2(XbarCfg.NoSlvPorts);
 
     // Define Address Routing Map
     typedef axi_pkg::xbar_rule_32_t rule_t; // 32-bit address rules
-    rule_t [XbarCfg.NoSlvPorts-1:0][XbarCfg.NoAddrRules-1:0] addr_map;
 
     // Define the base memory map
-    localparam rule_t [XbarCfg.NoAddrRules-1:0] BASE_MAP = '{
-        '{idx: 3'd0, start_addr: 32'h8000_0000, end_addr: 32'h8000_FFFF}, // Slave 0 (Boot ROM)
-        '{idx: 3'd1, start_addr: 32'h0000_0000, end_addr: 32'h007F_FFFF}, // Slave 1 (SDRAM Controller)
-        '{idx: 3'd2, start_addr: 32'h1000_0000, end_addr: 32'h1000_FFFF}, // Slave 2 (Frame Buffer)
-        '{idx: 3'd3, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}  // Slave 3 (SD Card Interface)
+    localparam rule_t [XbarCfg.NoAddrRules-1:0] ADDR_MAP = '{
+        '{idx: 1, start_addr: 32'h8000_0000, end_addr: 32'h8000_FFFF}, // Slave 0 (Boot ROM)
+        '{idx: 0, start_addr: 32'h0000_0000, end_addr: 32'h007F_FFFF} // Slave 1 (SDRAM Controller)
+        //'{idx: 3'd2, start_addr: 32'h1000_0000, end_addr: 32'h1000_FFFF}, // Slave 2 (Frame Buffer)
+        //'{idx: 3'd3, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}  // Slave 3 (SD Card Interface)
     };
 
-    // Apply the memory map to all masters so they can all see the same peripherals
-    assign addr_map[0] = BASE_MAP;
-    assign addr_map[1] = BASE_MAP;
 
     AXI_BUS #(
-        .AXI_ADDR_WIDTH ( AXI_ADDR_WIDTH ),
-        .AXI_DATA_WIDTH ( AXI_DATA_WIDTH ),
-        .AXI_ID_WIDTH   ( AXI_ID_WIDTH   ),
-        .AXI_USER_WIDTH ( AXI_USER_WIDTH )
+        .AXI_ADDR_WIDTH (AXI_ADDR_WIDTH),
+        .AXI_DATA_WIDTH (AXI_DATA_WIDTH),
+        .AXI_ID_WIDTH   (AXI_ID_WIDTH),
+        .AXI_USER_WIDTH (AXI_USER_WIDTH)
     ) axi_slv_ports [XbarCfg.NoSlvPorts] ();
 
     AXI_BUS #(
-        .AXI_ADDR_WIDTH ( AXI_ADDR_WIDTH ),
-        .AXI_DATA_WIDTH ( AXI_DATA_WIDTH ),
-        .AXI_ID_WIDTH   ( AXI_ID_WIDTH   ),
-        .AXI_USER_WIDTH ( AXI_USER_WIDTH )
+        .AXI_ADDR_WIDTH (AXI_ADDR_WIDTH),
+        .AXI_DATA_WIDTH (AXI_DATA_WIDTH),
+        .AXI_ID_WIDTH   (AXI_MST_ID_WIDTH),
+        .AXI_USER_WIDTH (AXI_USER_WIDTH)
     ) axi_mst_ports [XbarCfg.NoMstPorts] ();
 
     axi_xbar_intf #(
-        .AXI_USER_WIDTH ( AXI_USER_WIDTH ),
-        .Cfg            ( XbarCfg        ),
-        .rule_t         ( rule_t         )
+        .AXI_USER_WIDTH (AXI_USER_WIDTH),
+        .Cfg            (XbarCfg),
+        .rule_t         (rule_t)
     ) i_axi_xbar (
-        .clk_i                 ( bus_clk       ),
-        .rst_ni                ( ~reset        ),
-        .test_i                ( 1'b0          ),
-        .slv_ports             ( axi_slv_ports ),
-        .mst_ports             ( axi_mst_ports ),
-        .addr_map_i            ( addr_map      ),
-        .en_default_mst_port_i ( 1'b0          ), 
-        .default_mst_port_i    ( '0            )
+        .clk_i                 (bus_clk),
+        .rst_ni                (~reset),
+        .test_i                (1'b0),
+        .slv_ports             (axi_slv_ports),
+        .mst_ports             (axi_mst_ports),
+        .addr_map_i            (ADDR_MAP),
+        .en_default_mst_port_i (1'b0), 
+        .default_mst_port_i    ('0)            
     );
 
 
@@ -246,7 +244,6 @@ module top (
         .core_clk,
         .bus_clk,
         .rst(reset),
-        .bozo_debug(led[0]),
         .icache_port(axi_slv_ports[0]),
         .dcache_port(axi_slv_ports[1])
     );
@@ -257,44 +254,29 @@ module top (
     ////////////////////////////////////////////////////////////////////////
 
     axi4_boot_rom #(
-        .LOG_SIZE(10),
-        .INIT_FILE("bootloader.mem")
-    ) bootloader_i (
+        .LOG_SIZE(12),
+        .ADDR_WIDTH(AXI_ADDR_WIDTH),
+        .DATA_WIDTH(AXI_DATA_WIDTH),
+        .ID_WIDTH(AXI_MST_ID_WIDTH)
+    ) bootrom_i (
         .clk(bus_clk),
         .reset,
         .s_axi(axi_mst_ports[0])
     );
 
 
-
     ////////////////////////////////////////////////////////////////////////
     //// RAM ///////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic        cmd_ready;
-    logic        stop;
-    logic        read;
-    logic        write;
-    logic [3:0]  write_strb;
-    logic [22:0] addr;
-    logic [31:0] write_data;
-    logic [31:0] read_data;
-    logic        read_data_val;
-
-    sdram_controller #(
-        .MEM_CLK_FREQ(BUS_CLK_FREQ)
-    ) mem_controller_i (
+    sdram_axi_interface #(
+        .MEM_CLK_FREQ(BUS_CLK_FREQ),
+        .DATA_WIDTH(AXI_DATA_WIDTH),
+        .ID_WIDTH(AXI_MST_ID_WIDTH)
+    ) sdram_i (
         .mem_clk(bus_clk),
         .reset,
-        .cmd_ready,
-        .stop,
-        .read,
-        .write,
-        .write_strb,
-        .addr,
-        .write_data,
-        .read_data,
-        .read_data_val,
+        .s_axi(axi_mst_ports[1]),
         .O_sdram_clk,
         .O_sdram_cke,
         .O_sdram_ba,
@@ -308,28 +290,27 @@ module top (
     );
 
 
-
     ////////////////////////////////////////////////////////////////////////
     //// Display ///////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    display_driver display_driver_i (
-        .p_clk,
-        .s_clk,
-        .reset(reset),
-        .serial_pclk(tmds_clk_p),
-        .serial_blue(tmds_d0_p),
-        .serial_green(tmds_d1_p),
-        .serial_red(tmds_d2_p)
-    );
-
+    // display_driver display_driver_i (
+    //     .p_clk,
+    //     .s_clk,
+    //     .reset(reset),
+    //     .serial_pclk(tmds_clk_p),
+    //     .serial_blue(tmds_d0_p),
+    //     .serial_green(tmds_d1_p),
+    //     .serial_red(tmds_d2_p)
+    // );
+    // axi_mst_ports[2]
 
 
     ////////////////////////////////////////////////////////////////////////
     //// SD Card Reader ////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-
+    // axi_mst_ports[3]
 
 
 

@@ -1,15 +1,13 @@
 // Generate control signals for core
 
 module control (
-    input  logic        flush,
     input  logic        is_writeback,
     input  logic        ld_valid,
     input  logic [4:0]  rs1_addr,
     input  logic [4:0]  rs2_addr,
     input  logic [4:0]  ld_rd_addr,
 
-    output logic        reg_we,
-    output logic        stall_LS
+    output logic        reg_we
 );
 
     logic data_hazard;
@@ -19,7 +17,7 @@ module control (
     // dont writeback if branching (flush), or if fetch_stall (waiting on prev load) and instr is a non-load writeback
     // BOZO TODO
     //assign reg_we = ~flush & ((~fetch_stall & is_writeback) | ld_valid); 
-    assign reg_we = ~flush & ((is_writeback) | ld_valid); 
+    //assign reg_we = ~flush & ((is_writeback) | ld_valid); 
 
     // assign stall_LS = ~(flush | data_hazard);
 

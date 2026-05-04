@@ -7,29 +7,33 @@ MEMORY {
 }
 
 SECTIONS {
-  .tohost : {
+  .tohost : ALIGN(4) {
     KEEP(*(.tohost))
   } > HOSTIO
 
-  .fromhost : {
+  .fromhost : ALIGN(4) {
     KEEP(*(.fromhost))
   } > HOSTIO
 
-  .text : {
+  .text : ALIGN(4) {
     KEEP(*(.text.start))
     *(.text*)
-  } > RAM
+    . = ALIGN(4);
+  } > RAM =0
 
-  .rodata : {
+  .rodata : ALIGN(4) {
     *(.rodata*)
-  } > RAM
+    . = ALIGN(4);
+  } > RAM =0
 
-  .data : {
+  .data : ALIGN(4) {
     *(.data*)
-  } > RAM
+    . = ALIGN(4);
+  } > RAM =0
 
-  .bss : {
+  .bss : ALIGN(4) {
     *(.bss*)
     *(COMMON)
-  } > RAM
+    . = ALIGN(4);
+  } > RAM 
 }

@@ -9,13 +9,16 @@
 //      may need to support backpressure if write is in progress when a load occurs
 //      or maybe the cache handles this internally
 
+
 module LSU (
     input  logic        core_clk,
     input  logic        bus_clk,
     input  logic        rst,
 
     // Core Control
-    input logic         flush,
+    // TODO valid bit and flush
+    input  logic        valid,
+    input  logic        flush,
     output logic        stall,
     input  logic        is_load_op,
     input  load_op_t    load_op,
@@ -54,7 +57,7 @@ module LSU (
         end
     end
     
-    assign load = ~flush && is_load_op;
+    assign load = valid && ~flush && is_load_op;
     assign load_in_progress = pending_load && ~ld_valid;
 
     always_comb begin
@@ -85,7 +88,7 @@ module LSU (
         endcase
     end
     
-    assign store = is_store_op && ~flush && ~load_in_progress;
+    assign store = is_store_op && valid && ~flush && ~load_in_progress;
     assign write_mask = {4{store}} & we_mask;
 
 

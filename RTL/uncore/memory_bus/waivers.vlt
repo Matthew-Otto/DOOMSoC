@@ -1,0 +1,10 @@
+`verilator_config
+
+// Suppress trivial unsigned arithmetic comparisons in the round-robin arbiter
+lint_off -rule UNSIGNED -file "*rr_arb_tree.sv"
+
+// Suppress performance-hint warnings about split variables in the leading-zero counter
+lint_off -rule SPLITVAR -file "*lzc.sv"
+
+// Suppress circular logic warnings (UNOPTFLAT) across the entire PULP memory bus IP.
+lint_off -rule UNOPTFLAT -file "*"

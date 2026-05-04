@@ -10,8 +10,6 @@ module fetch #(
     input  logic        branch,
     input  logic [31:0] branch_target,
     
-    
-    output logic        flush,
     input  logic        ready,
     output logic        valid,
     output logic [31:0] instr,
@@ -28,15 +26,15 @@ module fetch #(
     logic [31:0] cache_instr;
     logic [31:0] cache_PC;
     logic        buffer_rdy;
-    logic        stall;
+    logic        stall_FE;
 
 
-    assign next_fetch_PC = (branch && (~cache_ready || stall)) ? branch_target : fetch_PC_mux + 4;
+    assign next_fetch_PC = (branch && (~cache_ready || stall_FE)) ? branch_target : fetch_PC_mux + 4;
 
     always_ff @(posedge core_clk) begin : PC_reg
         if (rst) begin
             fetch_PC <= RESET_PC;
-        end else if (branch || (~stall && cache_ready)) begin
+        end else if (branch || (~stall_FE && cache_ready)) begin
             fetch_PC <= next_fetch_PC;
         end
     end
@@ -49,25 +47,24 @@ module fetch #(
         .rst,
         .core_addr(fetch_PC_mux),
         .core_rdy(cache_ready),
-        .core_read_val(~stall),
+        .core_read_val(~stall_FE),
         .core_instr(cache_instr),
         .core_instr_val(cache_valid),
         .m_axi(icache_port)
     );
 
     always_ff @(posedge core_clk) begin
-        if (~stall && cache_ready)
+        if (~stall_FE && cache_ready)
             cache_PC <= fetch_PC_mux;
     end
 
-    assign flush = branch;
-    assign stall = ~buffer_rdy;
+    assign stall_FE = ~buffer_rdy;
 
     skid_buffer #(
         .DATA_WIDTH(64)
     ) skid_buffer_i (
         .clk(core_clk),
-        .reset(rst || flush),
+        .reset(rst || branch),
         .input_ready(buffer_rdy),
         .input_valid(cache_valid),
         .input_data({cache_PC,cache_instr}),
