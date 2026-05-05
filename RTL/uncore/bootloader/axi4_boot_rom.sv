@@ -100,14 +100,14 @@ module axi4_boot_rom #(
                     if (s_axi.ar_valid) begin
                         r_burst_len <= s_axi.ar_len;
                         r_burst_cnt <= 1;
-                        burst_addr <= word_addr + 4;
+                        burst_addr <= word_addr + 1;
                         r_id <= s_axi.ar_id;
                     end
                 end
 
                 READ : begin
                     if (s_axi.r_ready) begin
-                        burst_addr <= burst_addr + 4;
+                        burst_addr <= burst_addr + 1;
                         r_burst_cnt <= r_burst_cnt + 1;
                     end
                 end
