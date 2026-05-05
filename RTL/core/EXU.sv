@@ -10,8 +10,7 @@ module EXU (
     input  logic        subtract,
     input  logic        shift_right,
     input  logic        shift_arith,
-    input  mul_op_t     mul_op, 
-
+    input  mul_op_t     mul_op,
     input  logic [31:0] rs1_data,
     input  logic [31:0] rs2_data,
     input  logic [31:0] imm_i,

@@ -10,9 +10,10 @@ module icache (
     input  logic        bus_clk,
     input  logic        rst,
 
+    input  logic        flush,
     input  logic [31:0] core_addr,
-    output logic        core_rdy,
     input  logic        core_read_val,
+    output logic        core_rdy,
     
     output logic [31:0] core_instr,
     output logic        core_instr_val,
@@ -28,6 +29,7 @@ module icache (
     logic read_active;
     logic miss;
     logic pending_fill;
+    logic suppress;
     logic [31:0] core_addr_buffer;
 
     //// Core Addressing
@@ -41,7 +43,7 @@ module icache (
     assign bram_addr = {index, word_offset};
 
     //// Bus Addressing
-    logic [31:0] write_addr;
+    logic [31:0] write_addr, next_write_addr;
     logic [31:0] write_data;
 
     logic [1:0]  write_byte_offset;
@@ -115,7 +117,7 @@ module icache (
         .read_data(core_instr)
     );
 
-    assign core_instr_val = ~rst_active && (valid_tag && tag_match);
+    assign core_instr_val = ~rst_active && ~flush && ~suppress && (valid_tag && tag_match);
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -132,13 +134,19 @@ module icache (
             pending_fill <= 0;
         else if (miss)
             pending_fill <= 1;
+
+        // block output if a flush occurs during a fill
+        if (rst || cacheline_filled)
+            suppress <= 1'b0;
+        else if (flush && (miss || pending_fill))
+            suppress <= 1'b1;
         
         // save addresses for later fills
         if (core_rdy && core_read_val)
             core_addr_buffer <= core_addr;
     end
 
-    assign miss = read_active && ~core_instr_val;
+    assign miss = ~rst_active && read_active && ~(valid_tag && tag_match);
 
     assign core_rdy = ~(rst_active || miss || pending_fill);
 
@@ -152,37 +160,40 @@ module icache (
         STATE_AR_REQ,
         STATE_R_WAIT
     } state, next_state;
-    logic [31:0] fetch_addr, next_fetch_addr;
 
     always_ff @(posedge bus_clk) begin
         if (rst) begin
             state      <= STATE_IDLE;
-            fetch_addr <= '0;
+            write_addr <= '0;
         end else begin
             state      <= next_state;
-            fetch_addr <= next_fetch_addr;
+            write_addr <= next_write_addr;
         end
     end
 
     always_comb begin
         next_state      = state;
-        next_fetch_addr = fetch_addr;
+        next_write_addr = write_addr;
 
         // Default AXI driver states
         m_axi.ar_valid = 1'b0;
         m_axi.r_ready  = 1'b0;
+        m_axi.ar_addr  = {core_addr[31:5], 5'b00000};
 
         // Default BRAM driver states
         write_en   = 1'b0;
-        write_addr = fetch_addr;
         write_data = m_axi.r_data;
         cacheline_filled = 1'b0;
 
         case (state)
             STATE_IDLE: begin
                 if (miss || pending_fill) begin
-                    next_fetch_addr = {core_addr[31:5], 5'b00000};
-                    next_state      = STATE_AR_REQ;
+                    next_write_addr = {core_addr[31:5], 5'b00000};
+                    m_axi.ar_valid = 1'b1;
+                    if (m_axi.ar_ready)
+                        next_state = STATE_R_WAIT;
+                    else
+                        next_state = STATE_AR_REQ;
                 end
             end
 
@@ -197,7 +208,7 @@ module icache (
                 m_axi.r_ready = 1'b1;
                 if (m_axi.r_valid) begin
                     write_en = 1'b1;
-                    next_fetch_addr = fetch_addr + 32'd4; 
+                    next_write_addr = write_addr + 32'd4; 
 
                     if (m_axi.r_last) begin
                         // Assert valid ONLY on the final beat of the burst
@@ -216,7 +227,6 @@ module icache (
     ////////////////////////////////////////////////////////////////////////
 
     // AXI Read Address Channel (AR)
-    assign m_axi.ar_addr   = {fetch_addr[31:5], 5'b00000}; // Lock to cacheline start
     assign m_axi.ar_len    = 8'd7;     // 8 beats (ARLEN is length - 1)
     assign m_axi.ar_size   = 3'b010;   // 4 bytes per beat (32-bit bus)
     assign m_axi.ar_burst  = 2'b01;    // INCR burst type

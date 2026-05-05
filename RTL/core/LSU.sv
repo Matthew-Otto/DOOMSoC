@@ -2,7 +2,7 @@
 
 `include "defines.svh"
 
-// bozo
+// BOZO
 // ideally a load returns in one cycle
 // on a miss, assert stall until the cacheline is filled and the data is return
 // writes complete immediately from the LSU perspective
@@ -16,10 +16,7 @@ module LSU (
     input  logic        rst,
 
     // Core Control
-    // TODO valid bit and flush
     input  logic        valid,
-    input  logic        flush,
-    output logic        stall,
     input  logic        is_load_op,
     input  load_op_t    load_op,
     input  logic        is_store_op,
@@ -30,7 +27,8 @@ module LSU (
 
     // Register Write
     output logic        ld_valid,
-    output logic [4:0]  ld_rd_addr,
+    output logic        ld_inflight, // BOZO TODO implement this
+    output logic [4:0]  ld_rd_addr, // TODO this should be valid while ld in flight to check for hazards
     output logic [31:0] ld_rd_data,
 
     AXI_BUS.Master      dcache_port
@@ -41,7 +39,6 @@ module LSU (
     ////////////////////////////////////////////////////////////////////////
     logic load;
     logic pending_load;
-    logic load_in_progress;
     load_op_t load_op_reg;
     logic [31:0] core_read_data;
 
@@ -57,8 +54,8 @@ module LSU (
         end
     end
     
-    assign load = valid && ~flush && is_load_op;
-    assign load_in_progress = pending_load && ~ld_valid;
+    assign load = valid && is_load_op;
+    assign ld_inflight = pending_load && ~ld_valid;
 
     always_comb begin
         case (load_op_reg)
@@ -88,24 +85,21 @@ module LSU (
         endcase
     end
     
-    assign store = is_store_op && valid && ~flush && ~load_in_progress;
+    assign store = is_store_op && valid && ~ld_inflight;
     assign write_mask = {4{store}} & we_mask;
 
 
     ////////////////////////////////////////////////////////////////////////
     //// Dcache ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic cache_rdy;
+    logic cache_rdy; // BOZO use this?
     
-    // BOZO load_in_progress might be redundant (cache will deassert rdy when loads in progress)
-    assign stall = (is_load_op || is_store_op) && (load_in_progress || ~cache_rdy);
-
     dcache dcache_i (
         .core_clk,
         .bus_clk,
         .rst,
-        .core_addr(ls_addr),
         .core_rdy(cache_rdy),
+        .core_addr(ls_addr),
         .core_read_val(load),
         .core_write_val(write_mask),
         .core_write_data(write_data),

@@ -1,5 +1,9 @@
 // Calculates PC and fetches instructions from icache
 
+// if a branch occurs during an icache fill, 
+// the new branch target fetch will be stalled
+// while the badpath PC is loaded into the icache
+
 module fetch #(
     parameter logic [31:0] RESET_PC = 32'h8000_0000
 )(
@@ -10,67 +14,52 @@ module fetch #(
     input  logic        branch,
     input  logic [31:0] branch_target,
     
-    input  logic        ready,
-    output logic        valid,
-    output logic [31:0] instr,
-    output logic [31:0] PC,
+    input  logic        ready_FE,
+    output logic        valid_FE,
+    output logic [31:0] instr_FE,
+    output logic [31:0] PC_FE,
 
     AXI_BUS.Master      icache_port
 );
 
-    logic [31:0] fetch_PC;
-    logic [31:0] fetch_PC_mux;
-    logic [31:0] next_fetch_PC;
-    logic        cache_ready;
-    logic        cache_valid;
-    logic [31:0] cache_instr;
-    logic [31:0] cache_PC;
-    logic        buffer_rdy;
     logic        stall_FE;
+    logic [31:0] PC_reg;
+    logic [31:0] fetch_PC;
+    logic [31:0] next_PC;
+    logic        cache_ready;
 
+    assign stall_FE = ~ready_FE;
 
-    assign next_fetch_PC = (branch && (~cache_ready || stall_FE)) ? branch_target : fetch_PC_mux + 4;
+    assign next_PC = (branch && ~cache_ready) ? branch_target : fetch_PC + 4;
 
-    always_ff @(posedge core_clk) begin : PC_reg
+    always_ff @(posedge core_clk) begin
         if (rst) begin
-            fetch_PC <= RESET_PC;
+            PC_reg <= RESET_PC;
         end else if (branch || (~stall_FE && cache_ready)) begin
-            fetch_PC <= next_fetch_PC;
+            PC_reg <= next_PC;
         end
     end
 
-    assign fetch_PC_mux = branch ? branch_target : fetch_PC;
+    assign fetch_PC = branch ? branch_target : PC_reg;
 
     icache icache_i (
         .core_clk,
         .bus_clk,
         .rst,
-        .core_addr(fetch_PC_mux),
-        .core_rdy(cache_ready),
+        .flush(branch),
+        .core_addr(fetch_PC),
         .core_read_val(~stall_FE),
-        .core_instr(cache_instr),
-        .core_instr_val(cache_valid),
+        .core_rdy(cache_ready),
+        .core_instr(instr_FE),
+        .core_instr_val(valid_FE),
         .m_axi(icache_port)
     );
 
     always_ff @(posedge core_clk) begin
-        if (~stall_FE && cache_ready)
-            cache_PC <= fetch_PC_mux;
+        if (rst)
+            PC_FE <= '0;
+        else if (~stall_FE && cache_ready)
+            PC_FE <= fetch_PC;
     end
-
-    assign stall_FE = ~buffer_rdy;
-
-    skid_buffer #(
-        .DATA_WIDTH(64)
-    ) skid_buffer_i (
-        .clk(core_clk),
-        .reset(rst || branch),
-        .input_ready(buffer_rdy),
-        .input_valid(cache_valid),
-        .input_data({cache_PC,cache_instr}),
-        .output_ready(ready),
-        .output_valid(valid),
-        .output_data({PC,instr})
-    );
 
 endmodule : fetch
