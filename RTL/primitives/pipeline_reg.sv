@@ -13,8 +13,7 @@ module pipeline_reg #(
     end
 
     always_ff @(posedge clk) begin
-        if (valid_in)
-            out <= in;
+        if (valid_in) out <= in;
     end
 
 endmodule : pipeline_reg
