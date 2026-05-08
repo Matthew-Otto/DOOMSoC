@@ -1,16 +1,18 @@
+// glitchless fast to slow CDC pulse stretch
+
 module pulse_stretcher #(
-    parameter FACTOR = 5
+    parameter FACTOR = 2 
 ) (
     input  logic clk,
     input  logic pulse_in,
     output logic pulse_out
 );
 
-    logic [FACTOR-1:0] shift_reg;
+    logic [FACTOR-2:0] shift_reg;
 
     always_ff @(posedge clk) begin
-        shift_reg <= {shift_reg[FACTOR-2:0], pulse_in};
+        shift_reg <= (shift_reg << 1) | pulse_in;
+        pulse_out <= pulse_in | (|shift_reg); 
     end
-    assign pulse_out = |shift_reg;
 
 endmodule : pulse_stretcher

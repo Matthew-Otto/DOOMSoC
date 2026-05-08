@@ -1,6 +1,10 @@
 `include "defines.svh"
 
-module core (
+module core #(
+    parameter int ADDR_WIDTH,
+    parameter int DATA_WIDTH,
+    parameter int ID_WIDTH
+) (
     input  logic        core_clk,
     input  logic        bus_clk,
     input  logic        rst,
@@ -13,22 +17,23 @@ module core (
     //// Fetch /////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic        branch_FE;
-    logic        branch_EX;
-    logic [31:0] branch_target_FE;
-    logic [31:0] branch_target_EX;
-    
     logic        ready_FE;
     logic        valid_FE;
     logic [31:0] PC_FE;
     logic [31:0] instr_FE;
+    logic        branch_EX;
+    logic [31:0] branch_target_EX;
 
-    fetch fetch_unit (
+    fetch #(
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .ID_WIDTH(ID_WIDTH)
+    ) fetch_unit (
         .core_clk,
         .bus_clk,
         .rst,
-        .branch(branch_FE),
-        .branch_target(branch_target_FE),
+        .branch(branch_EX),
+        .branch_target(branch_target_EX),
         .ready_FE(ready_FE),
         .valid_FE(valid_FE),
         .instr_FE(instr_FE),
@@ -42,12 +47,11 @@ module core (
     ////////////////////////////////////////////////////////////////////////
 
     logic flush_FE;
+    logic flush_DE;
     logic stall_DE;
-    logic valid_DE;
+    logic valid_DE_i;
     logic [31:0] PC_DE;
     logic [31:0] instr_DE;
-
-    assign flush_FE = branch_FE;
 
     skid_buffer #(
         .DATA_WIDTH(64)
@@ -58,21 +62,20 @@ module core (
         .input_valid(valid_FE),
         .input_data({PC_FE,instr_FE}),
         .output_ready(~stall_DE),
-        .output_valid(valid_DE),
+        .output_valid(valid_DE_i),
         .output_data({PC_DE,instr_DE})
     );
 
-    always_ff @(posedge core_clk) begin
-        {branch_FE,branch_target_FE} <= {branch_EX,branch_target_EX};
-    end
-
+    assign stall_DE = 1'b0; // BOZO TODO
 
     ////////////////////////////////////////////////////////////////////////
     //// Decode ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
     struct packed {
+        logic        valid;
         logic [31:0] PC;
+        logic [31:0] instr;
 
         logic [4:0]  rd_addr;
         logic [4:0]  rs1_addr;
@@ -105,7 +108,9 @@ module core (
         logic [31:0] imm_j;
     } DE_o, EX_i;
   
+    assign DE_o.valid = valid_DE_i && ~flush_DE;
     assign DE_o.PC = PC_DE;
+    assign DE_o.instr = instr_DE;
 
     decode decode_unit (
         .instr(instr_DE),
@@ -151,14 +156,12 @@ module core (
     //// DE:EX Pipeline Register ///////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic valid_EX;
+    logic flush_EX;
 
     pipeline_reg #(
         .WIDTH($bits(DE_o))
     ) pipeline_de_ex (
         .clk(core_clk),
-        .valid_in(valid_DE), // BOZO TODO
-        .valid_out(valid_EX),
         .in(DE_o),
         .out(EX_i)
     );
@@ -169,6 +172,10 @@ module core (
     ////////////////////////////////////////////////////////////////////////
 
     struct packed {
+        logic        valid;
+        logic [31:0] PC;
+        logic [31:0] instr;
+
         logic [31:0] alu_out;
         logic [4:0]  rd_addr;
         logic [31:0] st_data;
@@ -199,7 +206,7 @@ module core (
     );
 
     BRU branch_unit (
-        .valid(valid_EX),
+        .valid(EX_i.valid),
         .PC(EX_i.PC),
         .is_ctrl_op(EX_i.is_ctrl_op),
         .br_type(EX_i.br_type),
@@ -215,6 +222,10 @@ module core (
     );
 
     // Pass through
+    assign EX_o.valid = EX_i.valid && ~flush_EX;
+    assign EX_o.PC = EX_i.PC;
+    assign EX_o.instr = EX_i.instr;
+
     assign EX_o.rd_addr = EX_i.rd_addr;
     assign EX_o.st_data = EX_i.rs2_data;
     assign EX_o.is_load_op = EX_i.is_load_op;
@@ -226,14 +237,10 @@ module core (
     //// EX:LS Pipeline Register ///////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic        valid_LS;
-
     pipeline_reg #(
         .WIDTH($bits(EX_o))
     ) pipeline_ex_ls (
         .clk(core_clk),
-        .valid_in(valid_EX && ~branch_EX), // BOZO TODO: update this
-        .valid_out(valid_LS),
         .in(EX_o),
         .out(LS_i)
     );
@@ -246,12 +253,18 @@ module core (
     logic        ld_valid;
     logic        ld_inflight;
     logic [4:0]  ld_rd_addr;
+    logic stall_LS; // BOZO TODO
 
-    LSU loadstore_unit (
+    LSU #(
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .ID_WIDTH(ID_WIDTH)
+    ) loadstore_unit (
         .core_clk,
         .bus_clk,
         .rst,
-        .valid(valid_LS),
+        .valid(LS_i.valid),
+        .stall(stall_LS),
         .is_load_op(LS_i.is_load_op),
         .load_op(LS_i.load_op),
         .is_store_op(LS_i.is_store_op),
@@ -270,13 +283,19 @@ module core (
     ////////////////////////////////////////////////////////////////////////
     //// Register File /////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-        
+    
+    logic ex_we;
+    logic ld_we;
+
+    assign ex_we = EX_o.valid && EX_i.is_writeback;
+    assign ld_we = ld_valid;
+
     regfile regfile_i (
         .clk(core_clk),
-        .ex_we(valid_EX && is_writeback),
-        .ex_rd_addr(rd_addr_EX),
-        .ex_rd_data(alu_out),
-        .ld_we(ld_valid),
+        .ex_we,
+        .ex_rd_addr(EX_i.rd_addr),
+        .ex_rd_data(EX_o.alu_out),
+        .ld_we,
         .ld_rd_addr,
         .ld_rd_data,
         .rs1_addr(DE_o.rs1_addr),
@@ -291,6 +310,11 @@ module core (
     ////////////////////////////////////////////////////////////////////////
 
     control control_i (
+        .branch_EX,
+        .flush_FE,
+        .flush_DE,
+        .flush_EX,
+
         // Source Bypass/Hazard
         .rs1_addr_DE(DE_o.rs1_addr),
         .rs2_addr_DE(DE_o.rs2_addr),
@@ -301,7 +325,8 @@ module core (
         .is_store_op_DE(DE_o.is_store_op),
         
         .forward_rs1_DE,
-        .forward_rs2_DE
+        .forward_rs2_DE,
+        .stall_EX()
     );
 
 endmodule : core

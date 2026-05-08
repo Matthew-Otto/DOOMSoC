@@ -10,13 +10,19 @@
 //      or maybe the cache handles this internally
 
 
-module LSU (
+module LSU #(
+    parameter int ADDR_WIDTH,
+    parameter int DATA_WIDTH, 
+    parameter int ID_WIDTH
+) (
     input  logic        core_clk,
     input  logic        bus_clk,
     input  logic        rst,
 
     // Core Control
     input  logic        valid,
+    output logic        stall,
+
     input  logic        is_load_op,
     input  load_op_t    load_op,
     input  logic        is_store_op,
@@ -27,8 +33,8 @@ module LSU (
 
     // Register Write
     output logic        ld_valid,
-    output logic        ld_inflight, // BOZO TODO implement this
-    output logic [4:0]  ld_rd_addr, // TODO this should be valid while ld in flight to check for hazards
+    output logic        ld_inflight,
+    output logic [4:0]  ld_rd_addr,
     output logic [31:0] ld_rd_data,
 
     AXI_BUS.Master      dcache_port
@@ -74,7 +80,7 @@ module LSU (
     ////////////////////////////////////////////////////////////////////////
     logic store;
     logic [3:0] we_mask;
-    logic [3:0] write_mask;
+    logic [3:0] wr_en;
     
     always_comb begin
         case (store_op)
@@ -86,22 +92,29 @@ module LSU (
     end
     
     assign store = is_store_op && valid && ~ld_inflight;
-    assign write_mask = {4{store}} & we_mask;
+    assign wr_en = {4{store}} & we_mask;
 
 
     ////////////////////////////////////////////////////////////////////////
     //// Dcache ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic cache_rdy; // BOZO use this?
+    logic cache_rdy;
+    assign stall = valid && (is_store_op || is_load_op ) && ~cache_rdy;
     
-    dcache dcache_i (
+    cache #(
+        .MASTER_ID(1),
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .ID_WIDTH(ID_WIDTH)
+    ) dcache_i (
         .core_clk,
+        .core_clk_rst(rst),
         .bus_clk,
-        .rst,
+        .core_flush(1'b0),
         .core_rdy(cache_rdy),
         .core_addr(ls_addr),
         .core_read_val(load),
-        .core_write_val(write_mask),
+        .core_write_val(wr_en),
         .core_write_data(write_data),
         .core_read_data,
         .core_read_data_val(ld_valid),

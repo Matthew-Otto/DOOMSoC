@@ -1,4 +1,10 @@
 module control (
+    input  logic branch_EX,
+
+    output logic flush_FE,
+    output logic flush_DE,
+    output logic flush_EX,
+
     // Source Bypass/Hazard
     input  logic rs1_addr_DE,
     input  logic rs2_addr_DE,
@@ -9,14 +15,18 @@ module control (
     input  logic is_store_op_DE,
 
     output logic forward_rs1_DE,
-    output logic forward_rs2_DE
+    output logic forward_rs2_DE,
 
+    output logic stall_EX
 );
+
+    // flush logic
+    assign flush_FE = branch_EX;
+    assign flush_DE = branch_EX;
+    assign flush_EX = branch_EX;
 
     logic rs1_hazard;
     logic rs2_hazard;
-    logic forward_rs1;
-    logic forward_rs2;
 
     assign rs1_hazard = (ld_rd_addr_LS == rs1_addr_DE);
     assign rs2_hazard = (ld_rd_addr_LS == rs2_addr_DE);

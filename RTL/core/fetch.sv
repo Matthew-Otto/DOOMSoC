@@ -5,8 +5,11 @@
 // while the badpath PC is loaded into the icache
 
 module fetch #(
-    parameter logic [31:0] RESET_PC = 32'h8000_0000
-)(
+    parameter logic [31:0] RESET_PC = 32'h8000_0000,
+    parameter int ADDR_WIDTH,
+    parameter int DATA_WIDTH, 
+    parameter int ID_WIDTH
+) (
     input  logic        core_clk,
     input  logic        bus_clk,
     input  logic        rst,
@@ -42,16 +45,23 @@ module fetch #(
 
     assign fetch_PC = branch ? branch_target : PC_reg;
 
-    icache icache_i (
+    cache #(
+        .MASTER_ID(0),
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .ID_WIDTH(ID_WIDTH)
+    ) icache_i (
         .core_clk,
+        .core_clk_rst(rst),
         .bus_clk,
-        .rst,
-        .flush(branch),
+        .core_flush(branch),
+        .core_rdy(cache_ready),
         .core_addr(fetch_PC),
         .core_read_val(~stall_FE),
-        .core_rdy(cache_ready),
-        .core_instr(instr_FE),
-        .core_instr_val(valid_FE),
+        .core_write_val('0),
+        .core_write_data('0),
+        .core_read_data(instr_FE),
+        .core_read_data_val(valid_FE),
         .m_axi(icache_port)
     );
 

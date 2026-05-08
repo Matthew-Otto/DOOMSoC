@@ -40,10 +40,10 @@ async def test_soc(dut):
 
         # init system
         sdram = SDRAM(dut.sdram_i.sdram_controller_i, busclk, mem=mem)
-        sys_clk_ps = round((1/329_400_000) * 1e12)
-        mem_clk_ps = round((1/164_700_000) * 1e12)
+        sys_clk_ps = round((1/80_000_000) * 1e12)
+        bus_clk_ps = round((1/160_000_000) * 1e12)
         cocotb.start_soon(Clock(clk, sys_clk_ps, unit="ps").start())
-        cocotb.start_soon(Clock(busclk, mem_clk_ps, unit="ps").start())
+        cocotb.start_soon(Clock(busclk, bus_clk_ps, unit="ps").start())
     
         cocotb.start_soon(log_sim_speed(dut, clk))
         await reset_dut(clk, reset)

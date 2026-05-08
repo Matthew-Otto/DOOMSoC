@@ -10,8 +10,8 @@
 
 module sdram_axi_interface #(
     parameter int MEM_CLK_FREQ,
-    parameter int DATA_WIDTH   = 32,
-    parameter int ID_WIDTH     = 1
+    parameter int DATA_WIDTH = 32,
+    parameter int ID_WIDTH
 ) (
     input  logic        mem_clk,
     input  logic        reset,
@@ -30,17 +30,15 @@ module sdram_axi_interface #(
     output logic [3:0]  O_sdram_dqm       // data mask
 );
 
-    // BOZO TODO loopback wid and rid
-
-    logic        stop;
-    logic        read;
-    logic        write;
-    logic [3:0]  write_strb;
-    logic [20:0] addr;
-    logic        cmd_ready;
+    logic                  stop;
+    logic                  read;
+    logic                  write;
+    logic [3:0]            write_strb;
+    logic [20:0]           addr;
+    logic                  cmd_ready;
     logic [DATA_WIDTH-1:0] write_data;
     logic [DATA_WIDTH-1:0] read_data;
-    logic        read_data_val;
+    logic                  read_data_val;
 
 
     enum {
@@ -52,6 +50,7 @@ module sdram_axi_interface #(
 
     logic trigger_wr_resp;
     logic [2:0] r_burst_len, r_burst_cnt;
+    logic [ID_WIDTH-1:0] resp_id;
 
     logic aw_fire;
     logic ar_fire;
@@ -69,6 +68,7 @@ module sdram_axi_interface #(
     assign s_axi.r_data = read_data;
     assign s_axi.b_resp = 2'b00; // OKAY
     assign s_axi.r_resp = 2'b00; // OKAY
+    assign s_axi.r_id = resp_id;
 
     always_ff @(posedge mem_clk) begin
         if (reset) state <= IDLE;
@@ -148,6 +148,7 @@ module sdram_axi_interface #(
             s_axi.b_valid <= 1'b0;
         end else if (trigger_wr_resp) begin
             s_axi.b_valid <= 1'b1;
+            s_axi.b_id <= resp_id;
         end
     end
 
@@ -164,6 +165,14 @@ module sdram_axi_interface #(
                 r_burst_cnt <= r_burst_cnt + 3'd1;
             end
         end
+    end
+
+    // ID loopback
+    always_ff @(posedge mem_clk) begin
+        if (write)
+            resp_id <= s_axi.aw_id;
+        else if (read)
+            resp_id <= s_axi.ar_id;
     end
 
 

@@ -49,7 +49,7 @@ module decode (
     assign rs2_addr = instr[20+:5];
 
     // instructions that write to the register file
-    // (ALU and Jumps)
+    // (ALU and Jumps, no Loads)
     assign is_writeback = ({op[4],op[2:1]} == 3'b010) | ({op[4:2],op[0]} == 4'b1101);
 
     // ALU decode

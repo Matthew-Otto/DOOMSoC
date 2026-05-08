@@ -2,9 +2,11 @@ OUTPUT_ARCH("riscv")
 ENTRY(_start)
 
 MEMORY {
-  RAM (rwx)   : ORIGIN = 0x80000000, LENGTH = 16M
+  RAM (rwx)   : ORIGIN = 0x80000000, LENGTH = 8M
   HOSTIO (rw) : ORIGIN = 0x90000000, LENGTH = 100
 }
+
+PROVIDE(__stack_top = ORIGIN(RAM) + LENGTH(RAM));
 
 SECTIONS {
   .tohost : ALIGN(4) {
@@ -35,5 +37,5 @@ SECTIONS {
     *(.bss*)
     *(COMMON)
     . = ALIGN(4);
-  } > RAM 
+  } > RAM
 }

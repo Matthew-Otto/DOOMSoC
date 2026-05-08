@@ -18,6 +18,7 @@ fromhost:
 .global _exit
 
 _start:
+    la sp, __stack_top
     call main
     j _exit
 
