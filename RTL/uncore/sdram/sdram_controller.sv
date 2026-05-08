@@ -211,7 +211,7 @@ module sdram_controller #(
     logic [10:0] row_addr, latched_row_addr;
     logic [7:0]  col_addr, latched_col_addr;
 
-    assign latch_input = (state == IDLE) && (read || write);
+    assign latch_input = cmd_ready && (read || write);
     assign {bank_addr,row_addr,col_addr} = addr;
 
     always_ff @(posedge mem_clk) begin
@@ -374,10 +374,13 @@ module sdram_controller #(
                 end else if (read || write) begin
                     // if row is open (hit)
                     if (open_rows[bank_addr] && (row_addr == open_row_addr[bank_addr])) begin
-                        if (write && ~read_data_val)
+                        if (write && ~read_data_val) begin
+                            cmd_ready = 1;
                             next_state = WRITE;
-                        else if (read)
+                        end else if (read) begin
+                            cmd_ready = 1;
                             next_state = READ;
+                        end
                     
                     // if row is open (miss)
                     end else if (open_rows[bank_addr] && (row_addr != open_row_addr[bank_addr])) begin
@@ -394,7 +397,6 @@ module sdram_controller #(
 
     
             READ : begin
-                cmd_ready = 1;
                 sdram_cmd = CMD_READ;
                 sdram_bank = latched_bank_addr;
                 sdram_addr = {3'b0,latched_col_addr};
@@ -415,7 +417,6 @@ module sdram_controller #(
             end
             
             WRITE : begin
-                cmd_ready = 1;
                 sdram_cmd = CMD_WRITE;
                 O_sdram_dqm = ~write_strb;
                 sdram_bank = latched_bank_addr;

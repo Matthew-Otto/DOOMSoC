@@ -43,6 +43,8 @@ module sdram_axi_interface #(
 
     enum {
         IDLE,
+        WRITE_WAIT,
+        READ_WAIT,
         WRITE_DATA,
         WRITE_RESP,
         READ_DATA
@@ -51,16 +53,6 @@ module sdram_axi_interface #(
     logic trigger_wr_resp;
     logic [2:0] r_burst_len, r_burst_cnt;
     logic [ID_WIDTH-1:0] resp_id;
-
-    logic aw_fire;
-    logic ar_fire;
-    logic w_fire;
-    logic r_fire;
-
-    assign aw_fire = s_axi.aw_valid && s_axi.aw_ready;
-    assign ar_fire = s_axi.ar_valid && s_axi.ar_ready;
-    assign w_fire  = s_axi.w_valid  && s_axi.w_ready;
-    assign r_fire  = s_axi.r_valid  && s_axi.r_ready;
 
     // Constant connections
     assign write_data   = s_axi.w_data;
@@ -92,48 +84,56 @@ module sdram_axi_interface #(
         addr  = '0;
 
         case (state)
-            IDLE: begin
-                // Assert ready early, relying on SDRAM cmd_ready
-                s_axi.aw_ready = cmd_ready;
-                s_axi.ar_ready = cmd_ready && ~s_axi.aw_valid;
-                // Zero-bubble write data ready
-                s_axi.w_ready = ~s_axi.ar_valid; 
+            IDLE : begin
+                write = s_axi.aw_valid && s_axi.w_valid;
+                read = s_axi.ar_valid;
 
-                // Command dispatch logic & State Transitions
-                if (aw_fire && w_fire) begin
+                if (s_axi.aw_valid && s_axi.w_valid) begin
+                    addr = s_axi.aw_addr[22:2];
                     write = 1'b1;
-                    addr  = s_axi.aw_addr[22:2];
-                    
-                    // Handle early termination if a single-beat write arrives immediately
-                    if (s_axi.w_last) begin
-                        stop = 1'b1;
-                        trigger_wr_resp = 1'b1;
-                        next_state = IDLE;
-                    end else begin
-                        next_state = WRITE_DATA;
-                    end
-                end else if (ar_fire) begin
-                    read  = 1'b1;
-                    addr  = s_axi.ar_addr[22:2];
-                    next_state = READ_DATA;
+                    s_axi.aw_ready = cmd_ready;
+                    next_state = cmd_ready ? WRITE_DATA : WRITE_WAIT;
+                end else if (s_axi.ar_valid) begin
+                    addr = s_axi.ar_addr[22:2];
+                    read = 1'b1;
+                    s_axi.ar_ready = cmd_ready;
+                    next_state = cmd_ready ? READ_DATA : READ_WAIT;
                 end
             end
 
-            WRITE_DATA: begin
+            WRITE_WAIT : begin
+                addr = s_axi.aw_addr[22:2];
+                write = 1'b1;
+                if (cmd_ready) begin
+                    s_axi.aw_ready = 1'b1;
+                    next_state = WRITE_DATA;
+                end
+            end
+
+            WRITE_DATA : begin
                 s_axi.w_ready = 1'b1;
 
-                if (w_fire && s_axi.w_last) begin
+                if (s_axi.w_valid && s_axi.w_last) begin
                     stop = 1'b1;
                     trigger_wr_resp = 1'b1;
                     next_state = IDLE;
                 end
             end
 
-            READ_DATA: begin
+            READ_WAIT : begin
+                addr = s_axi.ar_addr[22:2];
+                read = 1'b1;
+                if (cmd_ready) begin
+                    s_axi.ar_ready = 1'b1;
+                    next_state = READ_DATA;
+                end
+            end
+
+            READ_DATA : begin
                 s_axi.r_valid = read_data_val;
                 s_axi.r_last  = (r_burst_cnt == r_burst_len);
                 
-                if (r_fire && s_axi.r_last) begin
+                if (s_axi.r_valid  && s_axi.r_ready && s_axi.r_last) begin
                     next_state = IDLE;
                 end
             end
@@ -158,7 +158,7 @@ module sdram_axi_interface #(
             r_burst_len <= '0;
             r_burst_cnt <= '0;
         end else begin
-            if (ar_fire) begin
+            if (s_axi.ar_valid && s_axi.ar_ready) begin
                 r_burst_len <= s_axi.ar_len[2:0];
                 r_burst_cnt <= '0;
             end else if (read_data_val) begin

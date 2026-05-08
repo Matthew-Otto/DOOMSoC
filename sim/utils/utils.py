@@ -122,11 +122,11 @@ def parse_verilog_hex(filename):
             if not line or line.startswith('//'):
                 continue
             if line.startswith('@'):
-                address = int(line[1:], 16)
+                address = int(line[1:], 16) - 0x80000000
             else:
-                line_bytes = bytes.fromhex(line)
-                for byte in line_bytes:
-                    memory[address] = int(byte)
+                words = line.split(" ")
+                for word in words:
+                    memory[address] = int(word, 16)
                     address += 1
 
     return memory
