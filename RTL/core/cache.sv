@@ -229,7 +229,7 @@ module cache #(
     assign m_axi.ar_burst = 2'b01;    // INCR burst type
     assign m_axi.ar_id    = MASTER_ID;
 
-    assign m_axi.aw_addr  = {core_addr_buffer[31:CACHELINE_OFFSET], {CACHELINE_OFFSET{1'b0}}};
+    assign m_axi.aw_addr  = core_addr_buffer;
     assign m_axi.aw_len   = '0;
     assign m_axi.aw_size  = '0;
     assign m_axi.aw_burst = '0;

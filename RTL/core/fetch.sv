@@ -16,8 +16,8 @@ module fetch #(
 
     input  logic        branch,
     input  logic [31:0] branch_target,
-    
-    input  logic        ready_FE,
+    input  logic        stall_FE,
+
     output logic        valid_FE,
     output logic [31:0] instr_FE,
     output logic [31:0] PC_FE,
@@ -25,13 +25,10 @@ module fetch #(
     AXI_BUS.Master      icache_port
 );
 
-    logic        stall_FE;
     logic [31:0] PC_reg;
     logic [31:0] fetch_PC;
     logic [31:0] next_PC;
     logic        cache_ready;
-
-    assign stall_FE = ~ready_FE;
 
     assign next_PC = (branch && ~cache_ready) ? branch_target : fetch_PC + 4;
 

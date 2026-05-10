@@ -17,7 +17,7 @@ module core #(
     //// Fetch /////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic        ready_FE;
+    logic        stall_FE;
     logic        valid_FE;
     logic [31:0] PC_FE;
     logic [31:0] instr_FE;
@@ -32,9 +32,9 @@ module core #(
         .core_clk,
         .bus_clk,
         .rst,
+        .stall_FE,
         .branch(branch_EX),
         .branch_target(branch_target_EX),
-        .ready_FE(ready_FE),
         .valid_FE(valid_FE),
         .instr_FE(instr_FE),
         .PC_FE(PC_FE),
@@ -46,7 +46,6 @@ module core #(
     //// FE skid buffer ////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic flush_FE;
     logic flush_DE;
     logic stall_DE;
     logic valid_DE_i;
@@ -57,8 +56,8 @@ module core #(
         .DATA_WIDTH(64)
     ) skid_buffer_i (
         .clk(core_clk),
-        .reset(rst || flush_FE),
-        .input_ready(ready_FE),
+        .reset(rst || flush_DE),
+        .input_ready(),
         .input_valid(valid_FE),
         .input_data({PC_FE,instr_FE}),
         .output_ready(~stall_DE),
@@ -106,7 +105,7 @@ module core #(
         logic [31:0] imm_j;
     } DE_o, EX_i;
   
-    assign DE_o.valid = valid_DE_i && ~flush_DE;
+    assign DE_o.valid = valid_DE_i;
     assign DE_o.PC = PC_DE;
     assign DE_o.instr = instr_DE;
 
@@ -138,29 +137,20 @@ module core #(
         .imm_j(DE_o.imm_j)
     );
 
-    //// Source Bypass Logic
-    logic [31:0] rs1_data_DE;
-    logic [31:0] rs2_data_DE;
-    logic forward_rs1_DE;
-    logic forward_rs2_DE;
-
-    logic [31:0] ld_rd_data;
-
-    assign DE_o.rs1_data = forward_rs1_DE ? ld_rd_data : rs1_data_DE;
-    assign DE_o.rs2_data = forward_rs2_DE ? ld_rd_data : rs2_data_DE;
-
 
     ////////////////////////////////////////////////////////////////////////
     //// DE:EX Pipeline Register ///////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
     logic flush_EX;
+    logic stall_EX;
 
     pipeline_reg #(
         .WIDTH($bits(DE_o))
     ) pipeline_de_ex (
         .clk(core_clk),
-        .en(~stall_DE),
+        .rst(flush_EX),
+        .en(~stall_EX),
         .in(DE_o),
         .out(EX_i)
     );
@@ -221,7 +211,7 @@ module core #(
     );
 
     // Pass through
-    assign EX_o.valid = EX_i.valid && ~flush_EX;
+    assign EX_o.valid = EX_i.valid;
     assign EX_o.PC = EX_i.PC;
     assign EX_o.instr = EX_i.instr;
 
@@ -236,13 +226,15 @@ module core #(
     //// EX:LS Pipeline Register ///////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic stall_EX;
+    logic flush_LS;
+    logic stall_LS;
 
     pipeline_reg #(
         .WIDTH($bits(EX_o))
     ) pipeline_ex_ls (
         .clk(core_clk),
-        .en(~stall_EX),
+        .rst(flush_LS),
+        .en(~stall_LS),
         .in(EX_o),
         .out(LS_i)
     );
@@ -255,6 +247,7 @@ module core #(
     logic        ld_valid;
     logic        ld_inflight;
     logic [4:0]  ld_rd_addr;
+    logic [31:0] ld_rd_data;
     logic        ready_LS;
 
     LSU #(
@@ -302,8 +295,8 @@ module core #(
         .ld_rd_data,
         .rs1_addr(DE_o.rs1_addr),
         .rs2_addr(DE_o.rs2_addr),
-        .rs1_data(rs1_data_DE),
-        .rs2_data(rs2_data_DE)
+        .rs1_data(DE_o.rs1_data),
+        .rs2_data(DE_o.rs2_data)
     );
 
 
@@ -315,24 +308,27 @@ module core #(
         .branch_EX,
         .ready_LS,
 
-        .flush_FE,
+        .valid_DE(valid_DE_i),
+        .valid_EX(EX_i.valid),
+
         .flush_DE,
         .flush_EX,
+        .flush_LS,
 
         .stall_DE,
         .stall_EX,
+        .stall_LS,
+        .stall_FE,
 
         // Source Bypass/Hazard
+        .is_imm_DE(DE_o.is_imm),
         .rs1_addr_DE(DE_o.rs1_addr),
         .rs2_addr_DE(DE_o.rs2_addr),
         .ld_valid_LS(ld_valid),
         .ld_inflight_LS(ld_inflight),
         .ld_rd_addr_LS(ld_rd_addr),
-        .is_load_op_DE(DE_o.is_load_op),
-        .is_store_op_DE(DE_o.is_store_op),
-        
-        .forward_rs1_DE,
-        .forward_rs2_DE
+        .is_load_op_EX(EX_i.is_load_op),
+        .is_store_op_EX(EX_i.is_store_op)
     );
 
 endmodule : core
