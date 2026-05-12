@@ -43,10 +43,12 @@ module LSU #(
     ////////////////////////////////////////////////////////////////////////
     //// Load Queue ////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic load;
-    logic pending_load;
-    load_op_t load_op_reg;
+    logic        load;
+    logic        pending_load;
+    load_op_t    load_op_reg;
+    logic [1:0]  read_byte_of;
     logic [31:0] core_read_data;
+    logic [31:0] read_data_aligned;
 
     always_ff @(posedge core_clk) begin
         if (rst || ld_valid)
@@ -55,6 +57,7 @@ module LSU #(
             pending_load <= 1;
 
         if (load) begin
+            read_byte_of <= ls_addr[1:0];
             ld_rd_addr <= rd_addr;
             load_op_reg <= load_op;
         end
@@ -64,13 +67,22 @@ module LSU #(
     assign ld_inflight = pending_load && ~ld_valid;
 
     always_comb begin
+        case (read_byte_of)
+            2'b01:   read_data_aligned = {8'b0,  core_read_data[31:8]};
+            2'b10:   read_data_aligned = {16'b0, core_read_data[31:16]};
+            2'b11:   read_data_aligned = {24'b0, core_read_data[31:24]};
+            default: read_data_aligned = core_read_data;
+        endcase
+    end
+
+    always_comb begin
         case (load_op_reg)
-            i_LB   : ld_rd_data = {{24{core_read_data[7]}},core_read_data[7:0]};
-            i_LH   : ld_rd_data = {{16{core_read_data[15]}},core_read_data[15:0]};
-            i_LW   : ld_rd_data = core_read_data;
-            i_LBU  : ld_rd_data = {24'b0,core_read_data[7:0]};
-            i_LHU  : ld_rd_data = {16'b0,core_read_data[15:0]};
-            default: ld_rd_data = core_read_data;
+            i_LB   : ld_rd_data = {{24{read_data_aligned[7]}},read_data_aligned[7:0]};
+            i_LH   : ld_rd_data = {{16{read_data_aligned[15]}},read_data_aligned[15:0]};
+            i_LW   : ld_rd_data = read_data_aligned;
+            i_LBU  : ld_rd_data = {24'b0,read_data_aligned[7:0]};
+            i_LHU  : ld_rd_data = {16'b0,read_data_aligned[15:0]};
+            default: ld_rd_data = read_data_aligned;
         endcase
     end
 

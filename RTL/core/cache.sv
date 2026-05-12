@@ -63,74 +63,192 @@ module cache #(
 
 
     ////////////////////////////////////////////////////////////////////////
-    //// Core State Tracking ///////////////////////////////////////////////
+    //// Core IDK ///////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic hit, miss;
-    logic read_in_progress;  // a read is in progress
-    logic write_in_progress; // a write trigger a tag lookup
-    logic [3:0]  core_wr_en_buffer;
-    logic [31:0] core_addr_buffer;
-    logic [31:0] core_write_data_buffer;
-    logic        cacheline_filled;
-    logic        cacheline_ready;
-    logic        write_committed;
 
-    
+    logic tag_read, tag_read_ready;
+    logic        latch_address;
+    logic [31:0] core_addr_buffer;
+    logic        latch_write_data;
+    logic [3:0]  core_wr_en_buffer;
+    logic [31:0] core_write_data_buffer;
 
     always_ff @(posedge core_clk) begin
-        if (rst_active)
-            read_in_progress <= 0;
-        else if (core_rdy && core_read_val)
-            read_in_progress <= 1;
-        else if (hit || core_flush)
-            read_in_progress <= 0;
+        tag_read_ready <= tag_read;
 
-        if (rst_active)
-            write_in_progress <= 0;
-        else if (core_rdy && |core_write_val)
-            write_in_progress <= 1;
-        else if (write_committed)
-            write_in_progress <= 0;
-
-        if (core_rdy && (core_read_val || |core_write_val))
+        if (latch_address)
             core_addr_buffer <= core_addr;
 
-        if (core_rdy && |core_write_val) begin
-            core_write_data_buffer <= core_write_data;
+        if (latch_write_data) begin
             core_wr_en_buffer <= core_write_val;
+            core_write_data_buffer <= core_write_data;
         end
     end
-
-    // delay and strech cacheline_filled for core side logic
-    pulse_stretcher #(
-        .FACTOR(2)
-    ) cacheline_filled_cdc (
-        .clk(bus_clk),
-        .pulse_in(cacheline_filled),
-        .pulse_out(cacheline_ready)
-    );
-
 
     ////////////////////////////////////////////////////////////////////////
     //// Addressing Logic //////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic [1:0]  core_byte_os, bus_byte_os;
-    logic [2:0]  core_word_os, bus_word_os;
-    logic [7:0]  core_index, bus_index;
-    logic [18:0] core_tag, bus_tag;
+    logic [31:0] core_addr_mux;
+    logic [1:0]  core_byte_os, core_byte_os_buffer;
+    logic [2:0]  core_word_os, core_word_os_buffer;
+    logic [7:0]  core_index, core_index_buffer;
+    logic [18:0] core_tag, core_tag_buffer;
 
-    assign {core_tag, core_index, core_word_os, core_byte_os} = (cacheline_ready || write_in_progress) ? core_addr_buffer : core_addr;
+    assign {core_tag, core_index, core_word_os, core_byte_os} = core_addr_mux;
+    assign {core_tag_buffer, core_index_buffer, core_word_os_buffer, core_byte_os_buffer} = core_addr_buffer;
     
+
+    ////////////////////////////////////////////////////////////////////////
+    //// Core Interface ////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+    logic hit;
+    logic trigger_cache_fill;
+    logic core_data_wr_en;
+
+    // CDC
+    logic trigger_mem_write; // BOZO TODO this is CDC
+    logic write_committed;
+
+    enum {
+        CORE_IDLE,
+        CORE_WRITE,
+        CORE_READ,
+        CORE_CACHE_FILL
+    } core_state, next_core_state;
+
+    always_ff @(posedge core_clk) begin
+        if (rst_active) core_state <= CORE_IDLE;
+        else            core_state <= next_core_state;
+    end
+
+    always_comb begin
+        next_core_state = core_state;
+        core_rdy = 1'b0;
+        core_read_data_val = 1'b0;
+
+        core_addr_mux = core_addr;
+
+        latch_address = 1'b0;
+        latch_write_data = 1'b0;
+        tag_read = 1'b0;
+        core_data_wr_en = '0;
+        trigger_mem_write = 1'b0;
+        trigger_cache_fill = 1'b0;
+
+
+        case (core_state)           
+            CORE_IDLE : begin
+                if (~rst_active) begin
+                    core_rdy = 1'b1;
+                    if (core_write_val) begin
+                        latch_address = 1'b1;
+                        latch_write_data = 1'b1;
+                        tag_read = 1'b1;
+                        next_core_state = CORE_WRITE;
+                    end else if (core_read_val) begin
+                        latch_address = 1'b1;
+                        tag_read = 1'b1;
+                        next_core_state = CORE_READ;
+                    end
+                end
+            end
+            
+            CORE_WRITE : begin
+                // TODO BOZO can sdram handle writes at full speed?
+                // TODO: sync upon BUS write commit
+
+                // Write word to DRAM
+                trigger_mem_write = 1'b1;
+                // Write word to cache
+                if (hit) begin
+                    core_data_wr_en = core_wr_en_buffer;
+                end
+
+                core_rdy = 1'b1; // BOZO TODO only if write no stall bus
+                if (core_read_val) begin
+                    tag_read = 1'b1;
+                    next_core_state = CORE_READ;
+                end else if (core_write_val) begin
+                    tag_read = 1'b1;
+                end else begin
+                    next_core_state = CORE_IDLE;
+                end
+            end
+            
+            CORE_READ : begin
+                core_rdy = hit;
+                core_read_data_val = hit;
+
+                if (hit) begin
+                    // pipeline reads
+                    if (core_read_val) begin
+                        latch_address = 1'b1;
+                        tag_read = 1'b1;
+
+                    // pipeline writes
+                    end else if (core_write_val) begin
+                        latch_address = 1'b1;
+                        latch_write_data = 1'b1;
+                        tag_read = 1'b1;
+                        trigger_mem_write = 1'b1;
+                        next_core_state = CORE_WRITE;
+
+                    end else begin
+                        next_core_state = CORE_IDLE;
+                    end
+
+                // if miss, must fill cacheline from DRAM
+                end else begin
+                    trigger_cache_fill = 1'b1;
+                    core_addr_mux = core_addr_buffer;
+                    next_core_state = CORE_CACHE_FILL;
+                end
+            end
+            
+            CORE_CACHE_FILL : begin
+                core_rdy = hit;
+                core_read_data_val = hit;
+
+                if (hit) begin
+                    // pipeline reads
+                    if (core_read_val) begin
+                        latch_address = 1'b1;
+                        tag_read = 1'b1;
+                        next_core_state = CORE_READ;
+
+                    // pipeline writes
+                    end else if (core_write_val) begin
+                        latch_address = 1'b1;
+                        latch_write_data = 1'b1;
+                        tag_read = 1'b1;
+                        trigger_mem_write = 1'b1;
+                        next_core_state = CORE_WRITE;
+
+                    end else begin
+                        next_core_state = CORE_IDLE;
+                    end
+                end else begin
+                    tag_read = 1;
+                    core_addr_mux = core_addr_buffer;
+                end
+            end
+        endcase
+    end
+
+
+    ////////////////////////////////////////////////////////////////////////
+    //// Bus Addressing ////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+    // TODO BOZO resize
+    logic [1:0]  bus_byte_os;
+    logic [2:0]  bus_word_os;
+    logic [7:0]  bus_index;
+    logic [18:0] bus_tag;
+
+    logic        cacheline_filled;
     logic [31:0] fill_addr, next_fill_addr;
     
     assign {bus_tag, bus_index, bus_word_os, bus_byte_os} = fill_addr;
-
-
-    ////////////////////////////////////////////////////////////////////////
-    //// Tag store /////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////
-    logic        core_tag_rd_valid;
-    logic [18:0] core_tag_rd_data;
 
     logic [7:0]  bus_tag_addr;
     logic        bus_tag_wr_en;
@@ -148,6 +266,13 @@ module cache #(
         end
     end
 
+
+    ////////////////////////////////////////////////////////////////////////
+    //// Tag store /////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+    logic        core_tag_rd_valid;
+    logic [18:0] core_tag_rd_data;
+
     dpdc_bram #(
         .ADDR_WIDTH(8),
         .DATA_WIDTH(20)
@@ -164,22 +289,14 @@ module cache #(
         .rd_data_b()
     );
 
-    //// Tag match logic
-    assign hit = core_tag == core_tag_rd_data;
-    assign miss = ~hit;
-
-    //// Core interface
-    assign core_rdy = ~rst_active && ~write_in_progress && (~read_in_progress || hit);
-    assign core_read_data_val = hit && read_in_progress;
+    assign hit = tag_read_ready && core_tag_rd_valid && (core_tag_buffer == core_tag_rd_data);
 
 
     ////////////////////////////////////////////////////////////////////////
     //// Data store ////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////// 
-    logic core_data_wr_en;
     logic bus_data_wr_en;
 
-    assign core_data_wr_en = (hit && write_in_progress) ? core_wr_en_buffer : '0;
     assign bus_data_wr_en = m_axi.r_ready && m_axi.r_valid;
 
     dpdc_bram_be #(
@@ -200,19 +317,19 @@ module cache #(
 
 
     ////////////////////////////////////////////////////////////////////////
-    //// AXI Interface /////////////////////////////////////////////////////
+    //// AXI Bus Interface /////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
     enum {
-        IDLE,
-        READ_REQ,
-        READ_WAIT,
-        PENDING_WRITE,
-        WRITE_SYNC
-    } state, next_state;
+        BUS_IDLE,
+        BUS_READ_REQ,
+        BUS_READ_WAIT,
+        BUS_PEND_WRITE,
+        BUS_WRITE_SYNC
+    } bus_state, next_bus_state;
 
     always_ff @(posedge bus_clk) begin
-        if (rst_active) state <= IDLE;
-        else            state <= next_state;
+        if (rst_active) bus_state <= BUS_IDLE;
+        else            bus_state <= next_bus_state;
     end
 
     always_ff @(posedge bus_clk) begin
@@ -241,7 +358,7 @@ module cache #(
     assign m_axi.b_ready  = 1'b1;
 
     always_comb begin
-        next_state = state;
+        next_bus_state = bus_state;
         next_fill_addr = fill_addr;
 
         m_axi.ar_valid = 1'b0;
@@ -251,59 +368,59 @@ module cache #(
         cacheline_filled = 1'b0;
         write_committed = 1'b0;
 
-        case (state)
-            IDLE : begin
-                if (read_in_progress && miss && ~cacheline_ready) begin
+        case (bus_state)
+            BUS_IDLE : begin
+                if (trigger_cache_fill) begin
                     m_axi.ar_valid = 1'b1;
                     if (m_axi.ar_ready)
-                        next_state = READ_WAIT;
+                        next_bus_state = BUS_READ_WAIT;
                     else
-                        next_state = READ_REQ;
-                end else if (write_in_progress) begin
+                        next_bus_state = BUS_READ_REQ;
+                end else if (trigger_mem_write) begin
                     // BOZO the bus may accept aw and w at different times
                     m_axi.aw_valid = 1'b1;
                     m_axi.w_valid = 1'b1;
                     if (~m_axi.aw_ready) begin
-                        next_state = PENDING_WRITE;
+                        next_bus_state = BUS_PEND_WRITE;
                     end else begin
                         write_committed = 1'b1;
-                        next_state = WRITE_SYNC;
+                        next_bus_state = BUS_WRITE_SYNC;
                     end
                 end
             end
 
-            READ_REQ : begin
+            BUS_READ_REQ : begin
                 m_axi.ar_valid = 1'b1;
                 if (m_axi.ar_ready)
-                    next_state = READ_WAIT;
+                    next_bus_state = BUS_READ_WAIT;
             end
                 
-            READ_WAIT : begin
+            BUS_READ_WAIT : begin
                 m_axi.r_ready = 1'b1;
                 if (m_axi.r_valid) begin
                     if (m_axi.r_last) begin
                         // only update tag on final beat of the burst
                         cacheline_filled = 1'b1;
-                        next_state = IDLE;
+                        next_bus_state = BUS_IDLE;
                     end else begin
                         next_fill_addr = fill_addr + 32'd4;
                     end
                 end
             end
 
-            PENDING_WRITE : begin
+            BUS_PEND_WRITE : begin
                 // BOZO the bus may accept aw and w at different times
                 m_axi.aw_valid = 1'b1;
                 m_axi.w_valid = 1'b1;
                 if (m_axi.aw_ready) begin
                     write_committed = 1'b1;
-                    next_state = WRITE_SYNC;
+                    next_bus_state = BUS_WRITE_SYNC;
                 end
             end
 
-            WRITE_SYNC : begin
+            BUS_WRITE_SYNC : begin
                 write_committed = 1'b1;
-                next_state = IDLE;
+                next_bus_state = BUS_IDLE;
             end
         endcase
     end

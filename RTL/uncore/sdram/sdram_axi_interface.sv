@@ -34,7 +34,7 @@ module sdram_axi_interface #(
     logic                  read;
     logic                  write;
     logic [3:0]            write_strb;
-    logic [20:0]           addr;
+    logic [20:0]           addr, next_addr;
     logic                  cmd_ready;
     logic [DATA_WIDTH-1:0] write_data;
     logic [DATA_WIDTH-1:0] read_data;
@@ -65,6 +65,8 @@ module sdram_axi_interface #(
     always_ff @(posedge mem_clk) begin
         if (reset) state <= IDLE;
         else       state <= next_state;
+
+        addr <= next_addr;
     end
 
 
@@ -81,28 +83,20 @@ module sdram_axi_interface #(
         write = 1'b0;
         read  = 1'b0;
         stop  = 1'b0;
-        addr  = '0;
+        next_addr = addr;
 
         case (state)
             IDLE : begin
-                write = s_axi.aw_valid && s_axi.w_valid;
-                read = s_axi.ar_valid;
-
                 if (s_axi.aw_valid && s_axi.w_valid) begin
-                    addr = s_axi.aw_addr[22:2];
-                    write = 1'b1;
-                    s_axi.aw_ready = cmd_ready;
-                    next_state = cmd_ready ? WRITE_DATA : WRITE_WAIT;
+                    next_addr = s_axi.aw_addr[22:2];
+                    next_state = WRITE_WAIT;
                 end else if (s_axi.ar_valid) begin
-                    addr = s_axi.ar_addr[22:2];
-                    read = 1'b1;
-                    s_axi.ar_ready = cmd_ready;
-                    next_state = cmd_ready ? READ_DATA : READ_WAIT;
+                    next_addr = s_axi.ar_addr[22:2];
+                    next_state = READ_WAIT;
                 end
             end
 
             WRITE_WAIT : begin
-                addr = s_axi.aw_addr[22:2];
                 write = 1'b1;
                 if (cmd_ready) begin
                     s_axi.aw_ready = 1'b1;
@@ -121,7 +115,6 @@ module sdram_axi_interface #(
             end
 
             READ_WAIT : begin
-                addr = s_axi.ar_addr[22:2];
                 read = 1'b1;
                 if (cmd_ready) begin
                     s_axi.ar_ready = 1'b1;

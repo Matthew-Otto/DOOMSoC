@@ -28,19 +28,19 @@ module control (
     logic rs1_match;
     logic rs2_match;
     logic source_hazard;
-    logic LSU_hazard;
+    logic LSU_busy;
 
     assign rs1_match = (ld_rd_addr_LS == rs1_addr_DE);
     assign rs2_match = (ld_rd_addr_LS == rs2_addr_DE) && ~is_imm_DE; // Immediate instructions dont use RS2
     assign source_hazard = ld_inflight_LS && (rs1_match || rs2_match) && ~ld_valid_LS;
    
-    assign LSU_hazard = (is_load_op_EX || is_store_op_EX) && ~ready_LS;
+    assign LSU_busy = (is_load_op_EX || is_store_op_EX) && ~ready_LS;
 
     // pipeline control
     assign stall_LS = 0;
-    assign flush_LS = LSU_hazard;
+    assign flush_LS = LSU_busy;
 
-    assign stall_EX = LSU_hazard;
+    assign stall_EX = LSU_busy;
     assign flush_EX = source_hazard || branch_EX;
     
     assign stall_DE = stall_EX || source_hazard;

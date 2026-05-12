@@ -160,7 +160,7 @@ module top (
 
     localparam int AXI_ADDR_WIDTH = 32;
     localparam int AXI_DATA_WIDTH = 32;
-    localparam int AXI_ID_WIDTH   = 4;
+    localparam int AXI_ID_WIDTH   = 1;
     localparam int AXI_USER_WIDTH = 1;
 
     // Generate AXI types using PULP macros
@@ -168,15 +168,15 @@ module top (
 
     localparam axi_pkg::xbar_cfg_t XbarCfg = '{
         NoSlvPorts:         2, // 2 Masters
-        NoMstPorts:         2, // 4 Slaves // BOZO 4
-        MaxMstTrans:        1, // Max outstanding transactions
+        NoMstPorts:         2, // 4 Slaves
+        MaxMstTrans:        0, // Max outstanding transactions
         MaxSlvTrans:        1,
         FallThrough:        1'b0,
         LatencyMode:        axi_pkg::CUT_ALL_PORTS, // CUT_MST_PORTS
         PipelineStages:     32'd1,
         AxiIdWidthSlvPorts: AXI_ID_WIDTH,
         AxiIdUsedSlvPorts:  AXI_ID_WIDTH,
-        UniqueIds:          1'b1, // BOZO this might be okay to set if max transactions is 1
+        UniqueIds:          1'b1,
         AxiAddrWidth:       AXI_ADDR_WIDTH,
         AxiDataWidth:       AXI_DATA_WIDTH,
         NoAddrRules:        2  // One rule per slave // BOZO 4
@@ -221,8 +221,8 @@ module top (
         .slv_ports             (axi_slv_ports),
         .mst_ports             (axi_mst_ports),
         .addr_map_i            (ADDR_MAP),
-        .en_default_mst_port_i (1'b1),
-        .default_mst_port_i    ('d1) // Route bad addresses to ROM (Index 1)
+        .en_default_mst_port_i (1'b0),
+        .default_mst_port_i    ('0) // Route bad addresses to ROM (Index 1)
     );
 
 
