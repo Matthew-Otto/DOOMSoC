@@ -1,4 +1,10 @@
-module display_driver (
+module display_driver #(
+    parameter int ADDR_WIDTH   = 32,
+    parameter int DATA_WIDTH   = 32,
+    parameter int ID_WIDTH     = 1
+) (
+    input  logic bus_clk,
+    input  logic bus_clk_rst,
     input  logic p_clk,
     input  logic s_clk,
     input  logic reset,
@@ -6,7 +12,9 @@ module display_driver (
     output logic serial_pclk,
     output logic serial_blue,
     output logic serial_green,
-    output logic serial_red
+    output logic serial_red,
+
+    AXI_BUS.Slave s_axi
 );
 
     ////////////////////////////////////////////////////////////////////////
@@ -85,9 +93,16 @@ module display_driver (
     logic [7:0]  color_idx;
     logic [23:0] pixel;
 
-    frame_buffer frame_buffer_i (
-        .clk(p_clk),
-        .reset,
+    frame_buffer #(
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .ID_WIDTH(ID_WIDTH)
+    ) frame_buffer_i (
+        .bus_clk,
+        .bus_clk_rst,
+        .p_clk,
+        .p_clk_rst(reset),
+        .s_axi,
         .read_addr(frame_addr),
         .read_data(color_idx)
     );

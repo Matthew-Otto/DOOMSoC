@@ -14,7 +14,6 @@
     // if no tag match, no nothing
 
 module cache #(
-    //parameter int LOG_SIZE,
     parameter int MASTER_ID,
     parameter int ADDR_WIDTH,
     parameter int DATA_WIDTH,
@@ -38,7 +37,6 @@ module cache #(
     AXI_BUS.Master      m_axi
 );
 
-    // todo from log size
     localparam CACHELINE_OFFSET = 5;
 
     ////////////////////////////////////////////////////////////////////////
@@ -244,7 +242,6 @@ module cache #(
     ////////////////////////////////////////////////////////////////////////
     //// Bus Addressing ////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    // TODO BOZO resize
     logic [1:0]  bus_byte_os;
     logic [2:0]  bus_word_os;
     logic [7:0]  bus_index;

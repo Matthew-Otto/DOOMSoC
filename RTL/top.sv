@@ -338,7 +338,11 @@ module top (
     //// Display ///////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    display_driver display_driver_i (
+    display_driver #(
+        .ADDR_WIDTH(AXI_ADDR_WIDTH),
+        .DATA_WIDTH(AXI_DATA_WIDTH),
+        .ID_WIDTH(AXI_MST_ID_WIDTH)
+    ) display_driver_i (
         .bus_clk,
         .bus_clk_rst,
         .p_clk,
@@ -348,7 +352,7 @@ module top (
         .serial_blue(tmds_d0_p),
         .serial_green(tmds_d1_p),
         .serial_red(tmds_d2_p),
-        .bus_port(axi_mst_ports[2])
+        .s_axi(axi_mst_ports[2])
     );
 
 
