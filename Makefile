@@ -26,6 +26,12 @@ NEXTPNR = source /opt/oss-cad-suite/environment && nextpnr-himbaechel
 GOWIN_PACK = source /opt/oss-cad-suite/environment && gowin_pack
 OPENFPGALOADER = source /opt/oss-cad-suite/environment && openFPGALoader
 
+# Firmware variables
+FIRMWARE_DIR = firmware
+BOOTLOADER_HEX = $(FIRMWARE_DIR)/bin/bootloader.hex
+# Track all firmware C files, headers, assembly files, linker scripts, and makefile
+FW_SRC = $(shell find $(FIRMWARE_DIR) -type f \( -name '*.[chS]' -o -name '*.ld' -o -name 'Makefile' \))
+
 
 ##################
 ### FPGA BUILD ###
@@ -68,7 +74,7 @@ $(BUILD_DIR):
 	@mkdir -p $@
 
 # Synthesis
-$(SYNTH_OUT): $(SRC) | $(BUILD_DIR)
+$(SYNTH_OUT): $(SRC) $(BOOTLOADER_HEX) | $(BUILD_DIR)
 	@echo "========================================"
 	@echo "Running synthesis..."
 	@echo "========================================"
@@ -109,15 +115,16 @@ synth: $(SYNTH_OUT)
 pnr: $(PNR_OUT)
 asm: $(BITSTREAM)
 
-#---------------------------------------------------------------------
-# Clean targets
-#---------------------------------------------------------------------
-clean:
-	rm -rf $(BUILD_DIR)
-	rm -rf $(SIM_DIR)sim_build
-	rm -rf $(SIM_DIR)__pycache__
-	rm -f $(SIM_DIR)results.xml
 
+##################
+#### Firmware ####
+##################
+
+$(BOOTLOADER_HEX): $(FW_SRC)
+	@echo "========================================"
+	@echo "Building Firmware..."
+	@echo "========================================"
+	$(MAKE) -C $(FIRMWARE_DIR)
 
 
 ##################
@@ -126,7 +133,7 @@ clean:
 
 .PHONY: sim waves
 
-soc_sim:
+soc_sim: $(BOOTLOADER_HEX)
 	cd $(SIM_DIR) && python3 test_soc.py
 
 soc_waves:
@@ -136,3 +143,12 @@ soc_waves:
 waves:
 	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)
 	surfer -s $(SIM_DIR)state.surf.ron $(SIM_DIR)sim_build/dump.fst
+
+
+# Clean All
+clean:
+	rm -rf $(BUILD_DIR)
+	rm -rf $(SIM_DIR)sim_build
+	rm -rf $(SIM_DIR)__pycache__
+	rm -f $(SIM_DIR)results.xml
+	$(MAKE) -C $(FIRMWARE_DIR) clean

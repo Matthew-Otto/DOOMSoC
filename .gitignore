@@ -4,3 +4,5 @@ docs/
 sim_build/
 __pycache__
 *.log
+firmware/build
+firmware/bin

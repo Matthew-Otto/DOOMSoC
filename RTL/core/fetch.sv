@@ -5,7 +5,7 @@
 // while the badpath PC is loaded into the icache
 
 module fetch #(
-    parameter logic [31:0] RESET_PC = 32'h8000_0000,
+    parameter logic [31:0] RESET_PC = 32'h0000_0000,
     parameter int ADDR_WIDTH,
     parameter int DATA_WIDTH, 
     parameter int ID_WIDTH

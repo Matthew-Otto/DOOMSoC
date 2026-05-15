@@ -6,7 +6,7 @@ module axi4_boot_rom #(
     parameter int ADDR_WIDTH   = 32,
     parameter int DATA_WIDTH   = 32,
     parameter int ID_WIDTH     = 1,
-    parameter string INIT_FILE = "bootloader.mem"
+    parameter string INIT_FILE = "firmware/bin/bootloader.hex"
 )(
     input  logic clk,
     input  logic reset,
