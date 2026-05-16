@@ -79,7 +79,7 @@ module frame_buffer #(
                 if (s_axi.aw_valid) begin
                     if (s_axi.w_valid) begin
                         bram_wren = s_axi.w_strb;
-                        next_write_addr = aligned_addr + 4;
+                        next_write_addr = aligned_addr + 1;
                         if (!s_axi.w_last)
                             next_state = WRITE;
                     end else begin

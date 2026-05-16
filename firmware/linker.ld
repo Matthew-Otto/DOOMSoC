@@ -1,4 +1,4 @@
-ENTRY(bootloader)
+ENTRY(_start)
 
 MEMORY
 {

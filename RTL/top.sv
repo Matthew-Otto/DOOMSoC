@@ -1,6 +1,8 @@
 // Top module for doomcore project
 
-module top (
+module top #(
+    parameter string BOOT_ROM_FILE = "firmware/bin/bootloader.hex"
+) (
     input  logic       clk,
     //input  logic       clk0,
     //input  logic       clk1,
@@ -142,6 +144,7 @@ module top (
 
     logic core_clk_rst;
     logic bus_clk_rst;
+    logic p_clk_rst;
 
     logic async_reset;
     logic reset_i;
@@ -164,6 +167,21 @@ module top (
         .async_reset,
         .sync_reset(bus_clk_rst)
     );
+
+    reset_sync display_reset_gen (
+        .clk(bus_clk),
+        .async_reset,
+        .sync_reset(p_clk_rst)
+    );
+
+    //// Manual Reset Duplication
+    logic bus_clk_rst_rom;
+    logic bus_clk_rst_display;
+
+    always_ff @(posedge bus_clk) begin
+        bus_clk_rst_display <= bus_clk_rst;
+        bus_clk_rst_rom <= bus_clk_rst;
+    end
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -237,7 +255,7 @@ module top (
         .mst_ports             (axi_mst_ports),
         .addr_map_i            (ADDR_MAP),
         .en_default_mst_port_i (1'b0),
-        .default_mst_port_i    ('0) // Route bad addresses to ROM (Index 1)
+        .default_mst_port_i    ('0)
     );
 
 
@@ -261,35 +279,8 @@ module top (
         .core_clk_rst,
         .bus_clk,
         .bus_clk_rst,
-        .icache_port(axi_core_bus[0]),
-        .dcache_port(axi_core_bus[1])
-    );
-
-
-    // BOZO rip these out once resets are figured out
-    axi_multicut_intf #(
-        .ADDR_WIDTH (AXI_ADDR_WIDTH),
-        .DATA_WIDTH (AXI_DATA_WIDTH),
-        .ID_WIDTH   (AXI_ID_WIDTH),
-        .USER_WIDTH (AXI_USER_WIDTH),
-        .NUM_CUTS   (1)
-    ) icache_pipeline_cut (
-        .clk_i      (bus_clk),
-        .rst_ni     (~bus_clk_rst),
-        .in         (axi_core_bus[0]),
-        .out        (axi_slv_ports[0])
-    );
-    axi_multicut_intf #(
-        .ADDR_WIDTH (AXI_ADDR_WIDTH),
-        .DATA_WIDTH (AXI_DATA_WIDTH),
-        .ID_WIDTH   (AXI_ID_WIDTH),
-        .USER_WIDTH (AXI_USER_WIDTH),
-        .NUM_CUTS   (1)
-    ) dcache_pipeline_cut (
-        .clk_i      (bus_clk),
-        .rst_ni     (~bus_clk_rst),
-        .in         (axi_core_bus[1]),
-        .out        (axi_slv_ports[1])
+        .icache_port(axi_slv_ports[0]),
+        .dcache_port(axi_slv_ports[1])
     );
 
 
@@ -301,10 +292,11 @@ module top (
         .LOG_SIZE(12),
         .ADDR_WIDTH(AXI_ADDR_WIDTH),
         .DATA_WIDTH(AXI_DATA_WIDTH),
-        .ID_WIDTH(AXI_MST_ID_WIDTH)
+        .ID_WIDTH(AXI_MST_ID_WIDTH),
+        .BOOT_ROM_FILE(BOOT_ROM_FILE)
     ) bootrom_i (
         .clk(bus_clk),
-        .reset(bus_clk_rst),
+        .reset(bus_clk_rst_rom),
         .s_axi(axi_mst_ports[0])
     );
 
@@ -344,10 +336,10 @@ module top (
         .ID_WIDTH(AXI_MST_ID_WIDTH)
     ) display_driver_i (
         .bus_clk,
-        .bus_clk_rst,
+        .bus_clk_rst(bus_clk_rst_display),
         .p_clk,
+        .p_clk_rst,
         .s_clk,
-        .reset(reset),
         .serial_pclk(tmds_clk_p),
         .serial_blue(tmds_d0_p),
         .serial_green(tmds_d1_p),

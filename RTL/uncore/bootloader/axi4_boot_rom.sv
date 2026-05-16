@@ -6,7 +6,7 @@ module axi4_boot_rom #(
     parameter int ADDR_WIDTH   = 32,
     parameter int DATA_WIDTH   = 32,
     parameter int ID_WIDTH     = 1,
-    parameter string INIT_FILE = "firmware/bin/bootloader.hex"
+    parameter string BOOT_ROM_FILE = ""
 )(
     input  logic clk,
     input  logic reset,
@@ -21,8 +21,8 @@ module axi4_boot_rom #(
     logic [DATA_WIDTH-1:0] rom [0:SIZE-1];
 
     initial begin
-        if (INIT_FILE != "") begin
-            $readmemh(INIT_FILE, rom);
+        if (BOOT_ROM_FILE != "") begin
+            $readmemh(BOOT_ROM_FILE, rom);
         end
     end
 
@@ -116,14 +116,28 @@ module axi4_boot_rom #(
     end
 
 
+    //// TODO make sure this actually works
 
+    // Safely Blackhole AXI Writes
+    assign s_axi.aw_ready = 1'b1; // Accept address immediately
+    assign s_axi.w_ready  = 1'b1; // Blindly consume data
 
-    // TODO BOZO: Blackhole any writes to prevent bus lockup
-    assign s_axi.b_valid  = 1'b0; // TODO loopback
-    assign s_axi.b_id     = '0; // TODO loopback
-    assign s_axi.b_resp   = 2'b10; // SLVERR
-    
-    assign s_axi.aw_ready = 1'b1;
-    assign s_axi.w_ready  = 1'b0;
+    // Fire a response only on the last beat of the write burst
+    always_ff @(posedge clk) begin
+        if (reset) begin
+            s_axi.b_valid <= 1'b0;
+        end else begin
+            // Clear valid flag when master accepts it
+            if (s_axi.b_ready) s_axi.b_valid <= 1'b0;
+
+            // Trigger response when master sends the last data word
+            if (s_axi.w_valid && s_axi.w_ready && s_axi.w_last) begin
+                s_axi.b_valid <= 1'b1;
+                s_axi.b_id    <= s_axi.aw_id; // Loopback the ID
+            end
+        end
+    end
+
+    assign s_axi.b_resp = 2'b10; // SLVERR
 
 endmodule : axi4_boot_rom

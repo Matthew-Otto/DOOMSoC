@@ -1,5 +1,5 @@
 # Toolchain Definitions
-PREFIX  = riscv64-unknown-elf-
+PREFIX  = riscv64-elf-
 CC      = $(PREFIX)gcc
 OBJCOPY = $(PREFIX)objcopy
 OBJDUMP = $(PREFIX)objdump
@@ -33,7 +33,7 @@ $(ELF): $(SRC) linker.ld | $(BIN_DIR) $(BUILD_DIR)
 
 # Convert ELF to Verilog hex
 $(HEX): $(ELF)
-	$(OBJCOPY) -O verilog --verilog-data-width=4 --reverse-bytes=4 -R .riscv.attributes $< $@
+	$(OBJCOPY) -O verilog --verilog-data-width=4 $< $@
 
 # Generate Disassembly
 $(ASM): $(ELF)

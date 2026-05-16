@@ -12,27 +12,53 @@
 void bootloader(void);
 
 void __attribute__((naked, section(".boot"))) _start(void) {
-    __asm__ volatile (
-        // Initialize stack pointer
-        "la sp, __stack_top \n"
-        
-        // Jump to C function
-        "j bootloader \n"
-    );
+    // Initialize stack pointer
+    __asm("la sp, __stack_top");
+    // Jump to C function
+    __asm("j bootloader");
 }
 
 void __attribute__((noreturn)) bootloader(void) {
-    // Copy the program from SD Card to SDRAM
-    volatile uint32_t *src = (volatile uint32_t *)SDCARD_BASE;
-    volatile uint32_t *dst = (volatile uint32_t *)SDRAM_BASE;
-    uint32_t words_to_copy = APP_SIZE / 4;
+    // // Copy the program from SD Card to SDRAM
+    // volatile uint32_t *src = (volatile uint32_t *)SDCARD_BASE;
+    // volatile uint32_t *dst = (volatile uint32_t *)SDRAM_BASE;
+    // uint32_t words_to_copy = APP_SIZE / 4;
     
-    for (uint32_t i = 0; i < words_to_copy; i++) {
-        dst[i] = src[i];
-    }
+    // for (uint32_t i = 0; i < words_to_copy; i++) {
+    //     dst[i] = src[i];
+    // }
 
-    // Jump to program entry
-    ((void (*)(void))PROG_ENTRY)();
+    // // Jump to program entry
+    // ((void (*)(void))PROG_ENTRY)();
+
+    // Draw a picture ot the frame buffer and then spin forever
+    volatile uint8_t *fb_addr = (volatile uint8_t *)0x20000000;
+
+    for (int x = 0; x < 320; x++) {
+        for (int y = 0; y < 200; y++) {
+            if (x < 107) {
+                if (y < 100) {
+                    *fb_addr = 178; // #EF0000
+                } else {
+                    *fb_addr = 193; // #E7E7FF
+                }
+            } else if (x < 213) {
+                if (y < 100) {
+                    *fb_addr = 198; // #5353FF
+                } else {
+                    *fb_addr = 173; // #FF5F5F
+                }
+            } else {
+                if (y < 100) {
+                    *fb_addr = 160; // #FFFF73
+                } else {
+                    *fb_addr = 116; // #5BBF4F
+                }
+            }
+
+            fb_addr += 1;
+        }
+    }
 
     while (1) {}
 }

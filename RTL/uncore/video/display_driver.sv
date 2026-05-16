@@ -6,8 +6,8 @@ module display_driver #(
     input  logic bus_clk,
     input  logic bus_clk_rst,
     input  logic p_clk,
+    input  logic p_clk_rst,
     input  logic s_clk,
-    input  logic reset,
 
     output logic serial_pclk,
     output logic serial_blue,
@@ -47,7 +47,7 @@ module display_driver #(
 
 
     always_ff @(posedge p_clk) begin
-        if (reset) begin
+        if (p_clk_rst) begin
             x_count <= '0;
             y_count <= '0;
             de      <= '0;
@@ -101,7 +101,7 @@ module display_driver #(
         .bus_clk,
         .bus_clk_rst,
         .p_clk,
-        .p_clk_rst(reset),
+        .p_clk_rst,
         .s_axi,
         .read_addr(frame_addr),
         .read_data(color_idx)
@@ -125,7 +125,7 @@ module display_driver #(
 
     tmds_encoder blue_encoder (
         .p_clk,
-        .reset,
+        .reset(p_clk_rst),
         .de,
         .ctrl({vsync, hsync}),
         .color_value(blue_value),
@@ -133,7 +133,7 @@ module display_driver #(
     );
     tmds_encoder green_encoder (
         .p_clk,
-        .reset,
+        .reset(p_clk_rst),
         .de,
         .ctrl(2'b0),
         .color_value(green_value),
@@ -141,7 +141,7 @@ module display_driver #(
     );
     tmds_encoder red_encoder (
         .p_clk,
-        .reset,
+        .reset(p_clk_rst),
         .de,
         .ctrl(2'b0),
         .color_value(red_value),
@@ -157,28 +157,28 @@ module display_driver #(
     tmds_serializer pclk_serializer (
         .p_clk,
         .s_clk,
-        .reset,
+        .reset(p_clk_rst),
         .symbol_data(10'b0000011111),
         .serial_out(serial_pclk)
     );
     tmds_serializer blue_serializer (
         .p_clk,
         .s_clk,
-        .reset,
+        .reset(p_clk_rst),
         .symbol_data(blue_symbol),
         .serial_out(serial_blue)
     );
     tmds_serializer gree_serializer (
         .p_clk,
         .s_clk,
-        .reset,
+        .reset(p_clk_rst),
         .symbol_data(green_symbol),
         .serial_out(serial_green)
     );
     tmds_serializer red_serializer (
         .p_clk,
         .s_clk,
-        .reset,
+        .reset(p_clk_rst),
         .symbol_data(red_symbol),
         .serial_out(serial_red)
     );

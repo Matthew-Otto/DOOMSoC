@@ -19,38 +19,36 @@ from cocotb.triggers import Timer, ReadOnly, ReadWrite, ClockCycles, RisingEdge,
 async def test_soc(dut):
     setup_file_logger(dut._log, "INFO")
 
-    benchmarks = os.path.join(os.getcwd(), "../../benchmarks/bin")
+    # firmware_dir = os.path.join(os.getcwd(), "../../firmware/bin")
+    # bootloader = os.path.join(firmware_dir, "/bootloader.hex")
 
-    test_files = [os.path.join(benchmarks,f) for f in os.listdir(benchmarks) if f.endswith(".hex") and os.path.isfile(os.path.join(benchmarks, f))]
-    elf_files = [e.replace(".hex", ".elf") for e in test_files]
+    # if not os.path.isfile(bootloader):
+    #     assert 0, f"Error: bootloader file {bootloader} does not exist"
 
-    assert test_files, "Error: compile a test program before running simulation"
-    for e in elf_files:
-        if not os.path.isfile(e):
-            assert 0, f"Error: elf file {e} does not exist"
+    # mem = parse_verilog_hex(bootloader)
 
-    for hex_f, elf_f in zip(test_files, elf_files):
-        dut._log.info(f"Running test: {elf_f}")
+    dut._log.info(f"Running test")
 
-        mem = parse_verilog_hex(hex_f)
+    mem = None
 
-        clk = dut.core_clk
-        busclk = dut.bus_clk
-        reset = dut.reset
+    clk = dut.core_clk
+    busclk = dut.bus_clk
+    pclk = dut.p_clk
+    reset = dut.async_reset
 
-        # init system
-        sdram = SDRAM(dut.sdram_i.sdram_controller_i, busclk, mem=mem)
-        sys_clk_ps = round((1/80_000_000) * 1e12)
-        bus_clk_ps = round((1/160_000_000) * 1e12)
-        cocotb.start_soon(Clock(clk, sys_clk_ps, unit="ps").start())
-        cocotb.start_soon(Clock(busclk, bus_clk_ps, unit="ps").start())
-    
-        cocotb.start_soon(log_sim_speed(dut, clk))
-        await reset_dut(clk, reset)
+    # init system
+    sdram = SDRAM(dut.sdram_i.sdram_controller_i, busclk, mem=mem)
+    sys_clk_ps = round((1/80_000_000) * 1e12)
+    bus_clk_ps = round((1/160_000_000) * 1e12)
+    cocotb.start_soon(Clock(clk, sys_clk_ps, unit="ps").start())
+    cocotb.start_soon(Clock(busclk, bus_clk_ps, unit="ps").start())
+    cocotb.start_soon(Clock(pclk, 39.682, unit="ns").start())
 
-        await ClockCycles(clk, 100000)
+    cocotb.start_soon(log_sim_speed(dut, clk))
 
-        #sdram.dump(0x0, 0x100)
+    await ClockCycles(clk, 100000)
+
+    #sdram.dump(0x0, 0x100)
 
 
 
@@ -69,6 +67,8 @@ def test_runner():
     includes += [rtl_dir]
     waivers = [str(w) for w in rtl_dir.glob("**/*.vlt")] # Verilator waivers for 3rd party IP
 
+    hex_path = str(firmware_dir / "bin" / "bootloader.hex")
+
     # Copy firmware to sim directory
     build_dir.mkdir(parents=True, exist_ok=True)
     for mem_file in firmware_dir.glob("*.mem"):
@@ -80,6 +80,9 @@ def test_runner():
         hdl_toplevel=top_module,
         always=False,
         waves=True,
+        parameters={
+            "BOOT_ROM_FILE": f'"{hex_path}"'
+        },
         build_args=[
             "--build", "-j", "12", # Parallelize Compilation
             *waivers,
