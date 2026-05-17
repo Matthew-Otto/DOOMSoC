@@ -2,7 +2,7 @@ ENTRY(_start)
 
 MEMORY
 {
-    ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 8K
+    ROM (rx)  : ORIGIN = 0x20000000, LENGTH = 8K
     RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 8M
 }
 
@@ -18,4 +18,13 @@ SECTIONS
         *(.text*)
         *(.rodata*)
     } > ROM
+
+    .data : {
+        *(.data*)
+    } > RAM
+
+    .bss : {
+        *(.bss*)
+        *(COMMON)
+    } > RAM
 }

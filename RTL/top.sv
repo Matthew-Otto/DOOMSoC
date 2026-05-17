@@ -226,10 +226,10 @@ module top #(
 
     // Define the base memory map
     localparam rule_t [XbarCfg.NoAddrRules-1:0] ADDR_MAP = '{
-        '{idx: 0, start_addr: 32'h0000_0000, end_addr: 32'h0000_FFFF}, // Slave 0 (Boot ROM)
+        '{idx: 0, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}, // Slave 0 (Boot ROM)
         '{idx: 1, start_addr: 32'h8000_0000, end_addr: 32'h807F_FFFF}, // Slave 1 (SDRAM Controller)
-        '{idx: 2, start_addr: 32'h1000_0000, end_addr: 32'h1000_FFFF}  // Slave 2 (Frame Buffer)
-        //'{idx: 3'd3, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}  // Slave 3 (SD Card Interface)
+        '{idx: 2, start_addr: 32'h3000_0000, end_addr: 32'h3000_FFFF}  // Slave 2 (Frame Buffer)
+        //'{idx: 3'd3, start_addr: 32'h4000_0000, end_addr: 32'h4000_FFFF}  // Slave 3 (SD Card Interface)
     };
 
 

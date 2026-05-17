@@ -10,13 +10,18 @@ BUILD_DIR = build
 # Architecture and Compiler Flags
 ARCH    = -march=rv32im -mabi=ilp32
 CFLAGS  = $(ARCH) -O0 -Wall -Wextra -ffreestanding -nostdlib -mstrict-align
-LDFLAGS = -T linker.ld -nostartfiles -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/bootloader.map
+LDSCRIPT = linker.ld
+LDFLAGS = -T $(LDSCRIPT) -nostartfiles -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/bootloader.map
 
 SRC = bootloader.c
 OBJ = bootloader.o
-ELF = $(BUILD_DIR)/bootloader.elf
 ASM = $(BUILD_DIR)/bootloader.asm
+ELF = $(BIN_DIR)/bootloader.elf
 HEX = $(BIN_DIR)/bootloader.hex
+
+# Extract the ROM base address from the linker script
+ROM_BASE = $(shell awk '/ROM.*ORIGIN/ { match($$0, /0x[0-9a-fA-F]+/); print substr($$0, RSTART, RLENGTH) }' $(LDSCRIPT))
+
 
 # Default target
 all: $(ASM) $(HEX)
@@ -28,12 +33,12 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 # Compile and link into ELF
-$(ELF): $(SRC) linker.ld | $(BIN_DIR) $(BUILD_DIR)
+$(ELF): $(SRC) $(LDSCRIPT) | $(BIN_DIR) $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(SRC) -o $@
 
 # Convert ELF to Verilog hex
 $(HEX): $(ELF)
-	$(OBJCOPY) -O verilog --verilog-data-width=4 $< $@
+	$(OBJCOPY) -O verilog --verilog-data-width=4 --adjust-vma=-$(ROM_BASE) $< $@
 
 # Generate Disassembly
 $(ASM): $(ELF)

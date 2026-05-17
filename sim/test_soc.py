@@ -19,15 +19,16 @@ from cocotb.triggers import Timer, ReadOnly, ReadWrite, ClockCycles, RisingEdge,
 async def test_soc(dut):
     setup_file_logger(dut._log, "INFO")
 
-    # firmware_dir = os.path.join(os.getcwd(), "../../firmware/bin")
-    # bootloader = os.path.join(firmware_dir, "/bootloader.hex")
+    firmware_dir = os.path.join(os.getcwd(), "../../firmware/bin")
+    bootloader = os.path.join(firmware_dir, "bootloader.elf")
 
-    # if not os.path.isfile(bootloader):
-    #     assert 0, f"Error: bootloader file {bootloader} does not exist"
+    if not os.path.isfile(bootloader):
+        assert 0, f"Error: bootloader file {bootloader} does not exist"
 
-    # mem = parse_verilog_hex(bootloader)
+    ref_sim = SpikeRunner(bootloader)
 
-    dut._log.info(f"Running test")
+
+    dut._log.info(f"Executing Bootloader")
 
     clk = dut.core_clk
     busclk = dut.bus_clk
@@ -44,7 +45,23 @@ async def test_soc(dut):
 
     cocotb.start_soon(log_sim_speed(dut, clk))
 
-    await ClockCycles(clk, 100000)
+    for _ in range(100):
+        if dut.cpu.branch_unit.valid.value != 1:
+            await RisingEdge(dut.cpu.branch_unit.valid)
+            await ReadOnly()
+
+        ref_pc, ref_instr = ref_sim.step()
+        sim_pc = dut.cpu.branch_unit.PC.value
+        print(f"Ref: {hex(ref_pc)} | {hex(ref_instr)}")
+        print(f"Sim: {hex(sim_pc)}")
+
+        assert ref_pc == sim_pc, f"Error: PC mismatch at time {get_sim_time(unit='ps')}ps"
+
+        await ClockCycles(clk, 1)
+        await ReadOnly()
+
+    #await ClockCycles(clk, 100000)
+    await ClockCycles(clk, 10)
 
     #sdram.dump(0x0, 0x100)
 
@@ -58,7 +75,6 @@ def test_runner():
     top_module = "top"
     sim_dir = Path(__file__).parent
     firmware_dir = sim_dir.parent / "firmware"
-    build_dir = sim_dir / "sim_build"
     rtl_dir = sim_dir.parent / "RTL"
     sources = list(rtl_dir.glob("**/*.sv")) # SV source files
     includes = [p.parent for p in list(set(rtl_dir.glob("**/*.svh")))] # SV header files
@@ -66,11 +82,6 @@ def test_runner():
     waivers = [str(w) for w in rtl_dir.glob("**/*.vlt")] # Verilator waivers for 3rd party IP
 
     hex_path = str(firmware_dir / "bin" / "bootloader.hex")
-
-    # Copy firmware to sim directory
-    build_dir.mkdir(parents=True, exist_ok=True)
-    for mem_file in firmware_dir.glob("*.mem"):
-        shutil.copy(mem_file, build_dir)
 
     sim.build(
         sources=sources,
@@ -89,6 +100,7 @@ def test_runner():
             "--trace-fst",
             "--trace-structs",
             "--threads", "4",
+            "--public-flat-rw",
         ],
     )
 

@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 // Address Map
-#define SDCARD_BASE 0x20000000
+#define SDCARD_BASE 0x40000000
 #define SDRAM_BASE  0x80000000
 
 #define APP_SIZE    0x00010000
@@ -32,7 +32,7 @@ void __attribute__((noreturn)) bootloader(void) {
     // ((void (*)(void))PROG_ENTRY)();
 
     // Draw a picture ot the frame buffer and then spin forever
-    volatile uint8_t *fb_addr = (volatile uint8_t *)0x10000000;
+    volatile uint8_t *fb_addr = (volatile uint8_t *)0x30000000;
 
     for (int x = 0; x < 320; x++) {
         for (int y = 0; y < 200; y++) {
