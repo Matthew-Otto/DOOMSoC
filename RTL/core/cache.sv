@@ -109,12 +109,13 @@ module cache #(
     logic core_data_wr_en;
 
     // CDC
-    logic trigger_mem_write; // BOZO TODO this is CDC
+    logic trigger_mem_write;
     logic write_committed;
 
     enum {
         CORE_IDLE,
         CORE_WRITE,
+        CORE_WRITE_WAIT,
         CORE_READ,
         CORE_CACHE_FILL
     } core_state, next_core_state;
@@ -157,24 +158,45 @@ module cache #(
             end
             
             CORE_WRITE : begin
-                // TODO BOZO can sdram handle writes at full speed?
-                // TODO: sync upon BUS write commit
-
-                // Write word to DRAM
-                trigger_mem_write = 1'b1;
                 // Write word to cache
                 if (hit) begin
                     core_data_wr_en = core_wr_en_buffer;
                 end
-
-                core_rdy = 1'b1; // BOZO TODO only if write no stall bus
-                if (core_read_val) begin
-                    tag_read = 1'b1;
-                    next_core_state = CORE_READ;
-                end else if (core_write_val) begin
-                    tag_read = 1'b1;
+                
+                // Write word to DRAM
+                trigger_mem_write = 1'b1;
+                if (write_committed) begin
+                    core_rdy = 1'b1;
+                    if (core_read_val) begin
+                        latch_address = 1'b1;
+                        tag_read = 1'b1;
+                        next_core_state = CORE_READ;
+                    end else if (core_write_val) begin
+                        latch_address = 1'b1;
+                        latch_write_data = 1'b1;
+                        tag_read = 1'b1;
+                    end else begin
+                        next_core_state = CORE_IDLE;
+                    end
                 end else begin
-                    next_core_state = CORE_IDLE;
+                    next_core_state = CORE_WRITE_WAIT;
+                end
+            end
+
+            CORE_WRITE_WAIT : begin
+                if (write_committed) begin
+                    core_rdy = 1'b1;
+                    if (core_read_val) begin
+                        latch_address = 1'b1;
+                        tag_read = 1'b1;
+                        next_core_state = CORE_READ;
+                    end else if (core_write_val) begin
+                        latch_address = 1'b1;
+                        latch_write_data = 1'b1;
+                        tag_read = 1'b1;
+                    end else begin
+                        next_core_state = CORE_IDLE;
+                    end
                 end
             end
             
@@ -274,23 +296,6 @@ module cache #(
     ////////////////////////////////////////////////////////////////////////
     logic        core_tag_rd_valid;
     logic [18:0] core_tag_rd_data;
-
-    // BOZO cleanup
-    // tdp_bram #(
-    //     .ADDR_WIDTH(8),
-    //     .DATA_WIDTH(20)
-    // ) tag_store (
-    //     .clk_a(core_clk),
-    //     .addr_a(core_index),
-    //     .wr_en_a('0),
-    //     .wr_data_a('0),
-    //     .rd_data_a({core_tag_rd_valid,core_tag_rd_data}),
-    //     .clk_b(bus_clk),
-    //     .addr_b(bus_tag_addr),
-    //     .wr_en_b(bus_tag_wr_en),
-    //     .wr_data_b(bus_tag_wr_data),
-    //     .rd_data_b()
-    // );
 
     sdp_bram #(
         .ADDR_WIDTH(8),

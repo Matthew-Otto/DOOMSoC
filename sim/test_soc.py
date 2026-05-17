@@ -29,15 +29,13 @@ async def test_soc(dut):
 
     dut._log.info(f"Running test")
 
-    mem = None
-
     clk = dut.core_clk
     busclk = dut.bus_clk
     pclk = dut.p_clk
     reset = dut.async_reset
 
     # init system
-    sdram = SDRAM(dut.sdram_i.sdram_controller_i, busclk, mem=mem)
+    sdram = SDRAM(dut.sdram_i.sdram_controller_i, busclk)
     sys_clk_ps = round((1/80_000_000) * 1e12)
     bus_clk_ps = round((1/160_000_000) * 1e12)
     cocotb.start_soon(Clock(clk, sys_clk_ps, unit="ps").start())

@@ -94,13 +94,27 @@ module LSU #(
     logic store;
     logic [3:0] we_mask;
     logic [3:0] wr_en;
-    
+    logic [31:0] aligned_write_data;
+
+    always_comb begin
+        casez ({store_op,ls_addr[1:0]})
+            {i_SB,2'b00} : we_mask = 4'b0001;
+            {i_SB,2'b01} : we_mask = 4'b0010;
+            {i_SB,2'b10} : we_mask = 4'b0100;
+            {i_SB,2'b11} : we_mask = 4'b1000;
+            {i_SH,2'b0?} : we_mask = 4'b0011;
+            {i_SH,2'b1?} : we_mask = 4'b1100;
+            {i_SW,2'b??} : we_mask = 4'b1111;
+            default : we_mask = 4'b0000;
+        endcase
+    end
+
     always_comb begin
         case (store_op)
-            i_SB   : we_mask = 4'b0001;
-            i_SH   : we_mask = 4'b0011;
-            i_SW   : we_mask = 4'b1111;
-            default: we_mask = 4'b0000;
+            i_SB :   aligned_write_data = {4{write_data[7:0]}};
+            i_SH :   aligned_write_data = {2{write_data[15:0]}};
+            i_SW :   aligned_write_data = write_data;
+            default: aligned_write_data = write_data;
         endcase
     end
     
@@ -129,7 +143,7 @@ module LSU #(
         .core_addr(ls_addr),
         .core_read_val(load),
         .core_write_val(wr_en),
-        .core_write_data(write_data),
+        .core_write_data(aligned_write_data),
         .core_read_data,
         .core_read_data_val(ld_valid),
         .m_axi(dcache_port)

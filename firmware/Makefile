@@ -9,7 +9,7 @@ BUILD_DIR = build
 
 # Architecture and Compiler Flags
 ARCH    = -march=rv32im -mabi=ilp32
-CFLAGS  = $(ARCH) -O2 -Wall -Wextra -ffreestanding -nostdlib -mstrict-align
+CFLAGS  = $(ARCH) -O0 -Wall -Wextra -ffreestanding -nostdlib -mstrict-align
 LDFLAGS = -T linker.ld -nostartfiles -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/bootloader.map
 
 SRC = bootloader.c

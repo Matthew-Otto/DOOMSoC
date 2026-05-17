@@ -175,12 +175,16 @@ module top #(
     );
 
     //// Manual Reset Duplication
+    logic bus_clk_rst_core;
+    logic bus_clk_rst_xbar;
     logic bus_clk_rst_rom;
     logic bus_clk_rst_display;
 
     always_ff @(posedge bus_clk) begin
-        bus_clk_rst_display <= bus_clk_rst;
+        bus_clk_rst_core <= bus_clk_rst;
+        bus_clk_rst_xbar <= bus_clk_rst;
         bus_clk_rst_rom <= bus_clk_rst;
+        bus_clk_rst_display <= bus_clk_rst;
     end
 
 
@@ -249,7 +253,7 @@ module top #(
         .rule_t         (rule_t)
     ) i_axi_xbar (
         .clk_i                 (bus_clk),
-        .rst_ni                (~bus_clk_rst),
+        .rst_ni                (~bus_clk_rst_xbar),
         .test_i                (1'b0),
         .slv_ports             (axi_slv_ports),
         .mst_ports             (axi_mst_ports),
@@ -278,7 +282,7 @@ module top #(
         .core_clk,
         .core_clk_rst,
         .bus_clk,
-        .bus_clk_rst,
+        .bus_clk_rst(bus_clk_rst_core),
         .icache_port(axi_slv_ports[0]),
         .dcache_port(axi_slv_ports[1])
     );
@@ -311,7 +315,7 @@ module top #(
         .ID_WIDTH(AXI_MST_ID_WIDTH)
     ) sdram_i (
         .mem_clk(bus_clk),
-        .reset(bus_clk_rst),
+        .reset(bus_clk_rst_xbar),
         .s_axi(axi_mst_ports[1]),
         .O_sdram_clk,
         .O_sdram_cke,

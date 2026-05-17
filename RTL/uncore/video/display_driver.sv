@@ -168,7 +168,7 @@ module display_driver #(
         .symbol_data(blue_symbol),
         .serial_out(serial_blue)
     );
-    tmds_serializer gree_serializer (
+    tmds_serializer green_serializer (
         .p_clk,
         .s_clk,
         .reset(p_clk_rst),
