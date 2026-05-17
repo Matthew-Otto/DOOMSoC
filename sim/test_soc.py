@@ -55,7 +55,10 @@ async def test_soc(dut):
         print(f"Ref: {hex(ref_pc)} | {hex(ref_instr)}")
         print(f"Sim: {hex(sim_pc)}")
 
-        assert ref_pc == sim_pc, f"Error: PC mismatch at time {get_sim_time(unit='ps')}ps"
+        if ref_pc != sim_pc:
+            print(ref_sim.regfile)
+            await ClockCycles(clk, 2)
+            assert 0, f"Error: PC mismatch at time {get_sim_time(unit='ps')}ps"
 
         await ClockCycles(clk, 1)
         await ReadOnly()
