@@ -31,7 +31,7 @@ module fetch #(
     logic [31:0] next_PC;
     logic        cache_ready;
 
-    assign next_PC = (branch && ~cache_ready) ? branch_target : fetch_PC + 4;
+    assign next_PC = (branch && (stall_FE || ~cache_ready)) ? branch_target : fetch_PC + 4;
 
     always_ff @(posedge core_clk) begin
         if (core_clk_rst) begin

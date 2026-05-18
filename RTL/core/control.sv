@@ -24,12 +24,11 @@ module control (
     input  logic [4:0] rd_addr_EX,
 
     input  logic       is_load_op_LS,
+    input  logic       is_store_op_LS,
     input  logic [4:0] rd_addr_LS,
     input  logic [4:0] ld_rd_addr_LS,
     input  logic       ld_inflight_LS,
-    input  logic       ld_valid_LS,
-
-    input  logic       is_store_op_EX
+    input  logic       ld_valid_LS
 );
 
     logic rs1_match_EX;
@@ -63,14 +62,14 @@ module control (
 
     assign source_hazard_LS = source_hazard_LS_dispatch || source_hazard_LS_inflight;
    
-    // Stall LD/ST op in EX if the LSU unit is busy
-    assign LSU_busy = valid_EX && (is_load_op_EX || is_store_op_EX) && ~ready_LS;
+    // Stall LD/ST op in LS if the LSU unit is busy
+    assign LSU_busy = valid_LS && (is_load_op_LS || is_store_op_LS) && ~ready_LS;
 
     // pipeline control
-    assign stall_LS = 0;
-    assign flush_LS = LSU_busy;
+    assign stall_LS = LSU_busy;
+    assign flush_LS = 1'b0;
 
-    assign stall_EX = LSU_busy;
+    assign stall_EX = stall_LS;
     assign flush_EX = source_hazard_EX || source_hazard_LS || branch_EX;
     
     assign stall_DE = stall_EX || source_hazard_EX || source_hazard_LS;

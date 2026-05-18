@@ -333,12 +333,11 @@ module core #(
         .rd_addr_EX(EX_i.rd_addr),
 
         .is_load_op_LS(LS_i.is_load_op),
+        .is_store_op_LS(LS_i.is_store_op),
         .rd_addr_LS(LS_i.rd_addr),
         .ld_rd_addr_LS(ld_rd_addr),
         .ld_inflight_LS(ld_inflight),
-        .ld_valid_LS(ld_valid),
-
-        .is_store_op_EX(EX_i.is_store_op)
+        .ld_valid_LS(ld_valid)
     );
 
 endmodule : core
