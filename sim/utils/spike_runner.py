@@ -9,6 +9,7 @@ class SpikeRunner:
         self.elf_file = elf_file
         self.first_run = True
 
+        self.regfile = []
         self.entry_pc = "0x20000000"
 
         cmd = [
@@ -53,6 +54,7 @@ class SpikeRunner:
     
     def dump_regfile(self):
         reg_dump = self.exec_cmd("reg 0")
+        self.last_regfile = self.regfile
         self.regfile = [int(v,16) for v in reg_dump.split() if ":" not in v]
 
     def run_until(self, untilpc):

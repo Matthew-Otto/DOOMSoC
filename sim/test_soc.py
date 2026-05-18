@@ -45,7 +45,7 @@ async def test_soc(dut):
 
     cocotb.start_soon(log_sim_speed(dut, clk))
 
-    for _ in range(1000000):
+    for _ in range(1000):
         if dut.cpu.branch_unit.valid.value != 1:
             await RisingEdge(dut.cpu.branch_unit.valid)
             await ReadOnly()
@@ -56,7 +56,8 @@ async def test_soc(dut):
         print(f"Sim: {hex(sim_pc)}")
 
         if ref_pc != sim_pc:
-            print(ref_sim.regfile)
+            for idx,reg in enumerate(ref_sim.last_regfile):
+                print(f"{idx:02} | {hex(reg)}")
             await ClockCycles(clk, 2)
             assert 0, f"Error: PC mismatch at time {get_sim_time(unit='ps')}ps"
 

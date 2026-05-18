@@ -98,7 +98,7 @@ class SDRAM:
                         b, r, c, rem = self.burst_read['b'], self.burst_read['r'], self.burst_read['c'], self.burst_read['rem']
                         
                         addr = self._get_addr(b, r, c)
-                        data = self.memory.get(addr, random.getrandbits(32))
+                        data = self.memory.get(addr, 0xdeadbeef)
                         self.read_pipeline[-1] = data 
                         
                         if self._is_debug:
@@ -143,7 +143,7 @@ class SDRAM:
                         raise Exception(f"SDRAM [READ ERROR]: Bank {bank} has no active row!")
                     else:
                         mem_addr = self._get_addr(bank, row, col)
-                        data = self.memory.get(mem_addr, random.getrandbits(32))
+                        data = self.memory.get(mem_addr, 0xdeadbeef)
                         self.read_pipeline[-1] = data 
                         
                         if self._is_debug:

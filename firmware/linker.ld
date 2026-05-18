@@ -17,14 +17,25 @@ SECTIONS
     .text : {
         *(.text*)
         *(.rodata*)
+        . = ALIGN(4);
     } > ROM
 
     .data : {
+        . = ALIGN(4);
+        _sdata = .;
         *(.data*)
-    } > RAM
+        . = ALIGN(4);
+        _edata = .;
+    } > RAM AT > ROM
+
+    _sidata = LOADADDR(.data);
 
     .bss : {
+        . = ALIGN(4);
+        _sbss = .;
         *(.bss*)
         *(COMMON)
+        . = ALIGN(4);
+        _ebss = .;
     } > RAM
 }
