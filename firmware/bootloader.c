@@ -10,11 +10,11 @@
 #define PROG_ENTRY  0x80000000
 
 // Linker aliases
-extern uint8_t _sidata;
-extern uint8_t _sdata;
-extern uint8_t _edata;
-extern uint8_t _sbss;
-extern uint8_t _ebss;
+extern uint8_t _sidata[];
+extern uint8_t _sdata[];
+extern uint8_t _edata[];
+extern uint8_t _sbss[];
+extern uint8_t _ebss[];
 
 
 void bootloader(void);
@@ -28,15 +28,15 @@ void __attribute__((naked, section(".boot"))) _start(void) {
 
 void __attribute__((noreturn)) bootloader(void) {
     // copy .data section from ROM to RAM
-    uint8_t* src = &_sidata;
-    uint8_t* dst = &_sdata;
-    while (dst < &_edata){
+    uint8_t* src = _sidata;
+    uint8_t* dst = _sdata;
+    while (dst < _edata){
         *dst++ = *src++;
     }
     
     // zero initialize .bss
-    uint8_t* bss = &_sbss;
-    while (bss < &_ebss){
+    uint8_t* bss = _sbss;
+    while (bss < _ebss){
         *bss++ = 0;
     }
 
