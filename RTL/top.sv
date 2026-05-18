@@ -282,7 +282,7 @@ module top #(
         .core_clk,
         .core_clk_rst,
         .bus_clk,
-        .bus_clk_rst(bus_clk_rst_core),
+        .bus_clk_rst(bus_clk_rst_xbar),
         .icache_port(axi_slv_ports[0]),
         .dcache_port(axi_slv_ports[1])
     );

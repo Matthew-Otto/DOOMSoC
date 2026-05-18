@@ -48,16 +48,20 @@ async def test_soc(dut):
     for _ in range(1000):
         if dut.cpu.branch_unit.valid.value != 1:
             await RisingEdge(dut.cpu.branch_unit.valid)
+            while dut.cpu.stall_EX.value:
+                await ClockCycles(clk, 1)
             await ReadOnly()
 
         ref_pc, ref_instr = ref_sim.step()
         sim_pc = dut.cpu.branch_unit.PC.value
         print(f"Ref: {hex(ref_pc)} | {hex(ref_instr)}")
         print(f"Sim: {hex(sim_pc)}")
+        for idx,reg in enumerate(ref_sim.regfile):
+            print(f"{idx:02} | {hex(reg)}")
 
         if ref_pc != sim_pc:
-            for idx,reg in enumerate(ref_sim.last_regfile):
-                print(f"{idx:02} | {hex(reg)}")
+            # for idx,reg in enumerate(ref_sim.last_regfile):
+            #     print(f"{idx:02} | {hex(reg)}")
             await ClockCycles(clk, 2)
             assert 0, f"Error: PC mismatch at time {get_sim_time(unit='ps')}ps"
 

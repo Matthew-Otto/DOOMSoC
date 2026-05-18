@@ -91,14 +91,13 @@ module cache #(
     ////////////////////////////////////////////////////////////////////////
     //// Addressing Logic //////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic [31:0] core_ts_addr_mux, core_ds_addr_mux;
-    logic [1:0]  core_ts_byte_os, core_ds_byte_os, core_byte_os_buffer;
-    logic [2:0]  core_ts_word_os, core_ds_word_os, core_word_os_buffer;
-    logic [7:0]  core_ts_index, core_ds_index, core_index_buffer;
-    logic [18:0] core_ts_tag, core_ds_tag, core_tag_buffer;
+    logic [31:0] core_addr_mux;
+    logic [1:0]  core_byte_os, core_byte_os_buffer;
+    logic [2:0]  core_word_os, core_word_os_buffer;
+    logic [7:0]  core_index, core_index_buffer;
+    logic [18:0] core_tag, core_tag_buffer;
     
-    assign {core_ts_tag, core_ts_index, core_ts_word_os, core_ts_byte_os} = core_ts_addr_mux;
-    assign {core_ds_tag, core_ds_index, core_ds_word_os, core_ds_byte_os} = core_ds_addr_mux;
+    assign {core_tag, core_index, core_word_os, core_byte_os} = core_addr_mux;
     assign {core_tag_buffer, core_index_buffer, core_word_os_buffer, core_byte_os_buffer} = core_addr_buffer;
     
     
@@ -108,7 +107,7 @@ module cache #(
     ////////////////////////////////////////////////////////////////////////
     logic hit;
     logic trigger_cache_fill;
-    logic [3:0] core_ds_wr_en;
+    logic [3:0] core_wr_en;
 
     // CDC
     logic trigger_mem_write;
@@ -133,13 +132,12 @@ module cache #(
         core_rdy = 1'b0;
         core_read_data_val = 1'b0;
 
-        core_ts_addr_mux = core_addr;
-        core_ds_addr_mux = core_addr;
+        core_addr_mux = core_addr;
 
         latch_address = 1'b0;
         latch_write_data = 1'b0;
         tag_read = 1'b0;
-        core_ds_wr_en = '0;
+        core_wr_en = '0;
         trigger_mem_write = 1'b0;
         trigger_cache_fill = 1'b0;
 
@@ -162,30 +160,38 @@ module cache #(
             end
             
             CORE_WRITE : begin
-                // Write word to cache
-                if (hit) begin
-                    core_ds_wr_en = core_wr_en_buffer;
-                    core_ds_addr_mux = core_addr_buffer;
-                end
-                
                 // Write word to DRAM
                 trigger_mem_write = 1'b1;
-                if (write_committed) begin
-                    core_rdy = 1'b1;
-                    if (core_read_val) begin
-                        latch_address = 1'b1;
-                        tag_read = 1'b1;
-                        next_core_state = CORE_READ;
-                    end else if (core_write_val) begin
-                        latch_address = 1'b1;
-                        latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                    end else begin
+
+                // If hit, write word to cache (ties up datastore, must stall one cycle)
+                if (hit) begin
+                    core_wr_en = core_wr_en_buffer;
+                    core_addr_mux = core_addr_buffer;
+                    if (write_committed) begin
                         next_core_state = CORE_IDLE;
+                    end else begin
+                        next_core_state = CORE_WRITE_WAIT;
                     end
+                
+                // If not hit, can service a request this cycle.
                 end else begin
-                    next_core_state = CORE_WRITE_WAIT;
-                end
+                    if (write_committed) begin
+                        core_rdy = 1'b1;
+                        if (core_read_val) begin
+                            latch_address = 1'b1;
+                            tag_read = 1'b1;
+                            next_core_state = CORE_READ;
+                        end else if (core_write_val) begin
+                            latch_address = 1'b1;
+                            latch_write_data = 1'b1;
+                            tag_read = 1'b1;
+                        end else begin
+                            next_core_state = CORE_IDLE;
+                        end
+                    end else begin
+                        next_core_state = CORE_WRITE_WAIT;
+                    end
+                end               
             end
 
             CORE_WRITE_WAIT : begin
@@ -230,8 +236,7 @@ module cache #(
                 // if miss (and not flush), must fill cacheline from DRAM
                 end else begin
                     trigger_cache_fill = 1'b1;
-                    core_ts_addr_mux = core_addr_buffer;
-                    core_ds_addr_mux = core_addr_buffer;
+                    core_addr_mux = core_addr_buffer;
                     next_core_state = CORE_CACHE_FILL;
                 end
             end
@@ -260,8 +265,7 @@ module cache #(
                     end
                 end else begin
                     tag_read = 1;
-                    core_ts_addr_mux = core_addr_buffer;
-                    core_ds_addr_mux = core_addr_buffer;
+                    core_addr_mux = core_addr_buffer;
                     if (core_flush)
                         next_core_state = CORE_CACHE_FILL_FLUSHED;
                 end
@@ -290,8 +294,7 @@ module cache #(
                     end
                 end else begin
                     tag_read = 1;
-                    core_ts_addr_mux = core_addr_buffer;
-                    core_ds_addr_mux = core_addr_buffer;
+                    core_addr_mux = core_addr_buffer;
                 end
             end
         endcase
@@ -343,7 +346,7 @@ module cache #(
         .wr_addr(bus_tag_addr),
         .wr_data(bus_tag_wr_data),
         .rd_clk(core_clk),
-        .rd_addr(core_ts_index),
+        .rd_addr(core_index),
         .rd_data({core_tag_rd_valid,core_tag_rd_data})
     );
 
@@ -362,8 +365,8 @@ module cache #(
         .DATA_WIDTH(32)
     ) data_store (
         .clk_a(core_clk),
-        .addr_a({core_ds_index, core_ds_word_os}),
-        .wr_en_a(core_ds_wr_en),
+        .addr_a({core_index, core_word_os}),
+        .wr_en_a(core_wr_en),
         .wr_data_a(core_write_data_buffer),
         .rd_data_a(core_read_data),
         .clk_b(bus_clk),
