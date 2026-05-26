@@ -92,8 +92,8 @@ async def test_verify(dut):
                 ref_pc, ref_instr, ref_asm = instr
                 sim_pc = dut.cpu.branch_unit.PC.value
 
-                print(f"Ref: {ref_pc} | {ref_instr} | {ref_asm}")
-                print(f"Sim: {hex(sim_pc)}")
+                print(f"{instr_cnt} Ref: {ref_pc} | {ref_instr} | {ref_asm}")
+                print(f"{instr_cnt} Sim: {hex(sim_pc)}")
 
                 if int(ref_pc,16) != sim_pc:
                     instr, regs = ref_sim.get_state_at(instr_cnt-1)

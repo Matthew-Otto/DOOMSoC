@@ -26,13 +26,11 @@ module BRU (
     logic eq;
     logic lt;
     logic ltu;
-    logic geu;
     logic branch_eval;
 
     assign eq = rs1_data == rs2_data;
     assign lt = $signed(rs1_data) < $signed(rs2_data);
     assign ltu = $unsigned(rs1_data) < $unsigned(rs2_data);
-    assign geu = ~ltu;
 
     always_comb begin
         case (comp_op)
@@ -41,7 +39,7 @@ module BRU (
             c_BLT  : branch_eval = lt;
             c_BGE  : branch_eval = ~lt;
             c_BLTU : branch_eval = ltu;
-            c_BGEU : branch_eval = geu;
+            c_BGEU : branch_eval = ~ltu;
             default: branch_eval = 1'b0;
         endcase
     end

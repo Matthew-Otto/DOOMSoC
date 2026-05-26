@@ -8,8 +8,8 @@ BIN_DIR = bin
 BUILD_DIR = build
 
 # Architecture and Compiler Flags
-ARCH    = -march=rv32im -mabi=ilp32
-CFLAGS  = $(ARCH) -O3 -Wall -Wextra -ffreestanding -nostdlib -mstrict-align
+ARCH    = -march=rv32i_zmmul -mabi=ilp32
+CFLAGS  = $(ARCH) -O2 -Wall -Wextra -ffreestanding -nolibc -mstrict-align
 LDSCRIPT = linker.ld
 LDFLAGS = -T $(LDSCRIPT) -nostartfiles -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/bootloader.map
 
