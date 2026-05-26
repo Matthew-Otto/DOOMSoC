@@ -62,8 +62,7 @@ module LSU #(
         end
     end
     
-    assign load = valid && is_load_op;
-    //assign ld_inflight = pending_load && ~ld_valid; // BOZO
+    assign load = valid && is_load_op && cache_rdy;
 
     always_comb begin
         case (read_byte_of)
