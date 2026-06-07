@@ -97,8 +97,8 @@ $(PNR_OUT): $(SYNTH_OUT) $(CST) $(SDC)
 		--vopt cst=$(CST) \
 		--log $(PNR_REPORT) \
 		--sdc $(SDC) \
-		--seed=2473161942916117713
-#-r
+		--tmg-ripup \
+		-r
 	@printf "\nPnR Warnings:\n"
 	@grep -i "warning" $(PNR_REPORT) || true
 

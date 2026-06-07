@@ -378,7 +378,8 @@ module top #(
     //// SD Card Reader ////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic sd_clk_prebuf;
+    logic sd_clk_ungated;
+    logic sd_clk_en;
 
     sdcard_axi_interface #(
         .BUS_CLK_FREQ(SYS_CLK_FREQ),
@@ -392,17 +393,18 @@ module top #(
         .bus_clk_rst(sys_clk_rst_rom),
         .sdcard_clk,
         .sdcard_clk_rst,
-        .sd_clk(sd_clk_prebuf),
+        .sd_clk(sd_clk_ungated),
+        .sd_clk_en,
         .sd_cmd,
         .sd_dat,
         .s_axi(axi_mst_ports[3])
     );
 
     ODDR sd_clk_io_driver (
-        .D0(1'b1),
+        .D0(sd_clk_en),
         .D1(1'b0),
         .TX(1'b0),
-        .CLK(sd_clk_prebuf),
+        .CLK(sd_clk_ungated),
         .Q0(sd_clk),
         .Q1()
     );

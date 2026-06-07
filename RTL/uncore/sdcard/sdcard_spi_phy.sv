@@ -28,7 +28,7 @@ module sdcard_spi_phy #(
     output logic [31:0]           write_data,
 
     // SPI interface
-    output logic sd_clk,
+    output logic sd_clk_en,
     output logic mosi,
     input  logic miso,
     output logic cs
@@ -315,8 +315,6 @@ module sdcard_spi_phy #(
     assign spi_rd_byte = rx_byte;
 
 
-    logic clk_en;
-
     spi spi_i (
         .clk,
         .rst,
@@ -325,7 +323,7 @@ module sdcard_spi_phy #(
         .tx_byte_ready,
         .rx_byte,
         .rx_byte_valid,
-        .clk_en,
+        .clk_en(sd_clk_en),
         .mosi,
         .miso
     );
@@ -334,7 +332,5 @@ module sdcard_spi_phy #(
         if (rst || set_cs || core_set_cs) cs <= 1'b1;
         else if (clear_cs || core_clear_cs) cs <= 1'b0;
     end
-
-    assign sd_clk = clk_en & clk;
 
 endmodule : sdcard_spi_phy

@@ -12,6 +12,7 @@ module sdcard_axi_interface #(
     input  logic sdcard_clk_rst,
 
     output logic       sd_clk,
+    output logic       sd_clk_en,
     inout  logic       sd_cmd,
     inout  logic [3:0] sd_dat,
 
@@ -23,9 +24,7 @@ module sdcard_axi_interface #(
     ////////////////////////////////////////////////////////////////////////
 
     logic sel_init_clk;
-    logic init_clk, init_clk_buf;
-    logic sdcard_op_clk;
-    logic [3:0] clk_sel;
+    logic init_clk;
 
     // very slow (400khz-100khz) SD card init clock generator
     clk_gen #(
@@ -37,30 +36,20 @@ module sdcard_axi_interface #(
         .clk_out(init_clk)
     );
 
-    BUFG init_clk_buf_i (
-        .I(init_clk),
-        .O(init_clk_buf)
+
+    assign sd_clk_gen = sel_init_clk ? init_clk : sdcard_clk;
+
+    BUFG sd_clk_buf (
+        .I(sd_clk_gen),
+        .O(sd_clk)
     );
 
-    // hard IP clock mux
-    DCS clk_mux (
-        .CLK0(sdcard_clk),
-        .CLK1(init_clk_buf),
-        .CLK2(1'b0),
-        .CLK3(1'b0),
-        .CLKSEL(clk_sel),
-        .SELFORCE(1'b0),
-        .CLKOUT(sdcard_op_clk)
-    );
-
-    assign clk_sel = sel_init_clk ? 4'b0010 : 4'b0001;
-
-    logic sdcard_op_clk_rst;
+    logic sd_clk_rst;
 
     reset_sync sys_reset_gen (
         .async_reset(sdcard_clk_rst),
-        .sync_clk(sdcard_op_clk),
-        .sync_reset(sdcard_op_clk_rst)
+        .sync_clk(sd_clk),
+        .sync_reset(sd_clk_rst)
     );
 
 
@@ -139,8 +128,8 @@ module sdcard_axi_interface #(
         .src_clk_i(bus_clk),
         .src_rst_ni(~bus_clk_rst),
         .src(axi_lite_csr),
-        .dst_clk_i(sdcard_op_clk),
-        .dst_rst_ni(~sdcard_op_clk_rst),
+        .dst_clk_i(sd_clk),
+        .dst_rst_ni(~sd_clk_rst),
         .dst(axi_lite_csr_cdc)
     );
 
@@ -163,8 +152,8 @@ module sdcard_axi_interface #(
     logic [31:0] block_addr;
 
     sd_csr sd_csr_i (
-        .clk(sdcard_op_clk),
-        .rst(sdcard_op_clk_rst),
+        .clk(sd_clk),
+        .rst(sd_clk_rst),
         .s_axi(axi_lite_csr_cdc),
         .init_clk(sel_init_clk),
         .set_cs,
@@ -221,7 +210,7 @@ module sdcard_axi_interface #(
         .wr_en_a(axi_wr_en),
         .wr_data_a(axi_wr_data),
         .rd_data_a(axi_rd_data),
-        .clk_b(sdcard_op_clk),
+        .clk_b(sd_clk),
         .addr_b(sd_buffer_addr),
         .wr_en_b(sd_wr_en),
         .wr_data_b(sd_wr_data),
@@ -241,8 +230,8 @@ module sdcard_axi_interface #(
     sdcard_spi_phy #(
         .ADDR_WIDTH(BUFFER_ADDR_WIDTH)
     ) sdcard_spi_phy_i (
-        .clk(sdcard_op_clk),
-        .rst(sdcard_op_clk_rst),
+        .clk(sd_clk),
+        .rst(sd_clk_rst),
         .core_set_cs(set_cs),
         .core_clear_cs(clear_cs),
         .busy,
@@ -261,7 +250,7 @@ module sdcard_axi_interface #(
         .read_data(sd_rd_data),
         .write_en(sd_wr_en),
         .write_data(sd_wr_data),
-        .sd_clk,
+        .sd_clk_en,
         .mosi(sd_cmd),
         .miso(sd_dat[0]),
         .cs(sd_dat[3])
