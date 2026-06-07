@@ -67,7 +67,7 @@ async def test_verify(dut):
 
     tracing = True
     iters = 1000000
-    step = 10000
+    step = 2000
 
     # await ClockCycles(clk, 50000)
     # return
@@ -113,12 +113,11 @@ async def test_verify(dut):
             sim = sim_regs(dut)
             sim.insert(0,0)
 
-            # BOZO
-            ref[5] = 0
-
             diffs = []
             for i in range(len(sim)):
                 if ref[i] != sim[i]:
+                    if i == 5 and ref[i] == 0x20000000:
+                        continue
                     diffs.append(i)
             if len(diffs) > 1:
                 print("Spike:")

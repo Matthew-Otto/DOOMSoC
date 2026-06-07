@@ -5,9 +5,9 @@ from cocotb.triggers import RisingEdge
 from cocotb.types import LogicArray
 
 class SDRAM:
-    def __init__(self, dut, clock_signal, mem={}, cas_latency=3, burst_length=8):
+    def __init__(self, dut, clock, mem={}, cas_latency=3, burst_length=8):
         self.dut = dut
-        self.clock = clock_signal
+        self.clock = clock
         self.cas_latency = cas_latency
         self.burst_length = burst_length
         

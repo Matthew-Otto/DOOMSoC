@@ -90,3 +90,17 @@ module ODDR #(
     output wire Q1
 );
 endmodule
+
+(* blackbox *)
+module DCS #(
+    parameter DCS_MODE = "RISING"
+)(
+    input CLK0,
+    input CLK1,
+    input CLK2,
+    input CLK3,
+    input [3:0] CLKSEL,
+    input SELFORCE,
+    output CLKOUT
+);
+endmodule

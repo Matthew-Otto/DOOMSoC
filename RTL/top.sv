@@ -19,6 +19,11 @@ module top #(
     output logic tmds_d1_p,  // green channel
     output logic tmds_d2_p,  // red channel
 
+    // SD Card
+    output logic       sd_clk,
+    inout  logic       sd_cmd,
+    inout  logic [3:0] sd_dat,
+
     // Embedded SDRAM port names
     output logic        O_sdram_clk,
     output logic        O_sdram_cke,
@@ -40,6 +45,7 @@ module top #(
 
     logic sys_clk;  // Main system clock
     logic sys_clk_gen;
+    logic sdcard_clk;
     logic p_clk;    // HDMI pixel clock
     logic s_clk;    // HDMI serializer clock (10 bit / p_clk) (DDR)
     logic s_clk_gen;
@@ -48,17 +54,20 @@ module top #(
     logic sclk_pll_lock;
 
     localparam SYS_CLK_FREQ = 81_000_000;
+    localparam SD_CLK_DIV = 4;
+    localparam SD_CLK_FREQ = SYS_CLK_FREQ / SD_CLK_DIV;
 
 `ifndef VERILATOR
     //// System Clock Generator
     rPLL #(
         .FCLKIN("27.0"),
+        .DYN_SDIV_SEL(SD_CLK_DIV),
         .IDIV_SEL(0), // -> PFD = 27.0 MHz (range: 3-500 MHz)
         .FBDIV_SEL(2), // -> CLKOUT = 81.0 MHz (range: 3.90625-625 MHz)
         .ODIV_SEL(8) // -> VCO = 648.0 MHz (range: 500-1250 MHz)
     ) sysclk_pll (
         .CLKOUTP(),
-        .CLKOUTD(),
+        .CLKOUTD(sdcard_clk),
         .CLKOUTD3(),
         .RESET(1'b0),
         .RESET_P(1'b0),
@@ -141,6 +150,7 @@ module top #(
     logic async_reset;
     logic sys_clk_rst;
     logic p_clk_rst;
+    logic sdcard_clk_rst;
 
     logic reset_i;
 
@@ -166,6 +176,12 @@ module top #(
         .async_reset(async_reset),
         .sync_clk(p_clk),
         .sync_reset(p_clk_rst)
+    );
+
+    reset_sync sdclk_reset_gen (
+        .async_reset(async_reset),
+        .sync_clk(sdcard_clk),
+        .sync_reset(sdcard_clk_rst)
     );
 
 
@@ -212,7 +228,7 @@ module top #(
 
     localparam axi_pkg::xbar_cfg_t XbarCfg = '{
         NoSlvPorts:         2, // 2 Masters
-        NoMstPorts:         3, // 4 Slaves
+        NoMstPorts:         4, // 4 Slaves
         MaxMstTrans:        0, // Max outstanding transactions
         MaxSlvTrans:        1,
         FallThrough:        1'b1,
@@ -223,7 +239,7 @@ module top #(
         UniqueIds:          1'b1,
         AxiAddrWidth:       AXI_ADDR_WIDTH,
         AxiDataWidth:       AXI_DATA_WIDTH,
-        NoAddrRules:        3  // One rule per slave
+        NoAddrRules:        4  // One rule per slave
     };
 
     localparam int AXI_MST_ID_WIDTH = AXI_ID_WIDTH + $clog2(XbarCfg.NoSlvPorts);
@@ -233,10 +249,10 @@ module top #(
 
     // Define the base memory map
     localparam rule_t [XbarCfg.NoAddrRules-1:0] ADDR_MAP = '{
-        '{idx: 0, start_addr: 32'h2000_0000, end_addr: 32'h2000_FFFF}, // Slave 0 (Boot ROM)
+        '{idx: 0, start_addr: 32'h2000_0000, end_addr: 32'h2000_0FFF}, // Slave 0 (Boot ROM)
         '{idx: 1, start_addr: 32'h8000_0000, end_addr: 32'h807F_FFFF}, // Slave 1 (SDRAM Controller)
-        '{idx: 2, start_addr: 32'h3000_0000, end_addr: 32'h3000_FFFF} // Slave 2 (Frame Buffer)
-        //'{idx: 3, start_addr: 32'h4000_0000, end_addr: 32'h4000_FFFF}  // Slave 3 (SD Card Interface)
+        '{idx: 2, start_addr: 32'h3000_0000, end_addr: 32'h3000_FFFF}, // Slave 2 (Frame Buffer)
+        '{idx: 3, start_addr: 32'h4000_0000, end_addr: 32'h4000_07FF}  // Slave 3 (SD Card Interface)
     };
 
 
@@ -275,13 +291,6 @@ module top #(
     ////////////////////////////////////////////////////////////////////////
 
     logic vsync, vsync_core;
-
-    AXI_BUS #(
-        .AXI_ADDR_WIDTH (AXI_ADDR_WIDTH),
-        .AXI_DATA_WIDTH (AXI_DATA_WIDTH),
-        .AXI_ID_WIDTH   (AXI_ID_WIDTH),
-        .AXI_USER_WIDTH (AXI_USER_WIDTH)
-    ) axi_core_bus [1:0] ();
 
     core #(
         .ADDR_WIDTH(AXI_ADDR_WIDTH),
@@ -369,8 +378,34 @@ module top #(
     //// SD Card Reader ////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    // axi_mst_ports[3]
+    logic sd_clk_prebuf;
 
+    sdcard_axi_interface #(
+        .BUS_CLK_FREQ(SYS_CLK_FREQ),
+        .SD_CLK_FREQ(SD_CLK_FREQ),
+        .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
+        .AXI_DATA_WIDTH(AXI_DATA_WIDTH),
+        .AXI_ID_WIDTH(AXI_MST_ID_WIDTH),
+        .AXI_USER_WIDTH(AXI_USER_WIDTH)
+    ) sdcard_i (
+        .bus_clk(sys_clk),
+        .bus_clk_rst(sys_clk_rst_rom),
+        .sdcard_clk,
+        .sdcard_clk_rst,
+        .sd_clk(sd_clk_prebuf),
+        .sd_cmd,
+        .sd_dat,
+        .s_axi(axi_mst_ports[3])
+    );
+
+    ODDR sd_clk_io_driver (
+        .D0(1'b1),
+        .D1(1'b0),
+        .TX(1'b0),
+        .CLK(sd_clk_prebuf),
+        .Q0(sd_clk),
+        .Q1()
+    );
 
 
     ////////////////////////////////////////////////////////////////////////

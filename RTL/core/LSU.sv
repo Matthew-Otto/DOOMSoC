@@ -2,14 +2,6 @@
 
 `include "defines.svh"
 
-// BOZO
-// ideally a load returns in one cycle
-// on a miss, assert stall until the cacheline is filled and the data is return
-// writes complete immediately from the LSU perspective
-//      may need to support backpressure if write is in progress when a load occurs
-//      or maybe the cache handles this internally
-
-
 module LSU #(
     parameter int ADDR_WIDTH,
     parameter int DATA_WIDTH, 
@@ -48,6 +40,7 @@ module LSU #(
     logic [1:0]  read_byte_of;
     logic [31:0] core_read_data;
     logic [31:0] read_data_aligned;
+    logic cache_rdy;
 
     always_ff @(posedge clk) begin
         if (rst || ld_valid)
@@ -122,7 +115,7 @@ module LSU #(
     ////////////////////////////////////////////////////////////////////////
     //// Dcache ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
-    logic cache_rdy;
+    
     assign ready = ~(valid && (is_store_op || is_load_op ) && ~cache_rdy);
     
     cache #(

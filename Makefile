@@ -135,12 +135,19 @@ $(BOOTLOADER_HEX): $(FW_SRC)
 soc_sim: $(BOOTLOADER_HEX)
 	cd $(SIM_DIR) && python3 test_soc.py
 
+sd_sim:
+	cd $(SIM_DIR) && python3 test_sdcard.py
+
 soc_verify: $(BOOTLOADER_HEX)
 	cd $(SIM_DIR) && python3 test_verify.py
 
 soc_waves:
 	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)
 	surfer -s $(SIM_DIR)core_state.surf.ron $(SIM_DIR)sim_build/dump.fst
+
+sd_waves:
+	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)
+	surfer -s $(SIM_DIR)sdcard_state.surf.ron $(SIM_DIR)sim_build/dump.fst
 
 waves:
 	@test -f $(SIM_DIR)sim_build/dump.fst || (echo "Error: dump.fst not found in $(SIM_DIR)sim_build/. Simulate a target first." && exit 1)

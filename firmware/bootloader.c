@@ -1,24 +1,9 @@
-// Draw a spinning cube
-
 #include <stdint.h>
+#include <stddef.h>
 
-// Address Map
-#define SDCARD_BASE 0x40000000
-#define SDRAM_BASE  0x80000000
-#define FB_BASE     0x30000000
-
-// Display Settings
-#define SCREEN_W    320
-#define SCREEN_H    200
-
-// Palette (8-bit)
-#define BLACK       0
-#define WHITE       224
-
-// Fixed-Point Math Constants
-#define FIXED_SHIFT 8    // Equivalent to dividing/multiplying by 256
-#define FOV         150  // Perspective scaling factor
-#define Z_OFFSET    300  // Pushes the cube away from the camera (vertices are +/- 100)
+#define SET_BIT(REG, BIT)     ((REG) |= (BIT))
+#define CLEAR_BIT(REG, BIT)   ((REG) &= ~(BIT))
+#define READ_BIT(REG, BIT)    ((REG) & (BIT))
 
 // Linker aliases
 extern uint8_t _sidata[];
@@ -29,165 +14,158 @@ extern uint8_t _ebss[];
 
 void bootloader(void) __attribute__((used));
 
+// Address Map
+#define SDCARD_BASE 0x40000000
+#define SDRAM_BASE  0x80000000
+#define APP_SIZE    0x00010000 // BOZO
+
+typedef struct {
+    uint32_t csr;              // 0x0000
+    uint8_t spi_reg;           // 0x0004
+    uint8_t __pad1[3];
+    uint32_t blk_addr;         // 0x0008
+    uint8_t __pad2[0x400-12];
+    uint32_t buffer1[0x200/4]; // 0x400
+    uint32_t buffer2[0x200/4]; // 0x600
+} sdcard_map;
+_Static_assert(offsetof(sdcard_map, buffer1) == 0x400, "SD card buffer address offset is incorrect");
+
+#define INIT_CLK      1U << 0
+#define CLR_CS        1U << 1
+#define SET_CS        1U << 2
+#define WRITE_BLK     1U << 3
+#define READ_BLK      1U << 4
+#define SPI_BUSY      1U << 8
+#define SUCCESS       1U << 9
+#define ERROR         1U << 10
+
+volatile sdcard_map* const sdcard = (volatile sdcard_map *)SDCARD_BASE;
+
+
+
 void __attribute__((naked, section(".boot"))) _start(void) {
     __asm("la sp, __stack_top");
     __asm("j bootloader");
 }
 
-// Minimal absolute value helper
-static inline int iabs(int v) { return v < 0 ? -v : v; }
 
-// Write a single pixel, with bounds checking
-static inline void draw_pixel(int x, int y, uint8_t color) {
-    volatile uint8_t *fb = (volatile uint8_t *)FB_BASE;
-    if (x >= 0 && x < SCREEN_W && y >= 0 && y < SCREEN_H) {
-        fb[y * SCREEN_W + x] = color;
-    }
+uint8_t spi_transfer(uint8_t data) {
+    sdcard->spi_reg = data;
+    while (READ_BIT(sdcard->csr, SPI_BUSY));
+    return sdcard->spi_reg;
 }
 
-// Fast clear using 32-bit writes
-static void clear_screen(uint8_t color) {
-    volatile uint32_t *fb = (volatile uint32_t *)FB_BASE;
-    uint32_t c32 = (color << 24) | (color << 16) | (color << 8) | color;
-    for (int i = 0; i < (SCREEN_W * SCREEN_H) / 4; i++) {
-        fb[i] = c32;
-    }
-}
 
-// Bresenham's line algorithm (already uses purely integers!)
-static void draw_line(int x0, int y0, int x1, int y1, uint8_t color) {
-    int dx = iabs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    int dy = -iabs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy, e2;
-
-    while (1) {
-        draw_pixel(x0, y0, color);
-        if (x0 == x1 && y0 == y1) break;
-        e2 = 2 * err;
-        if (e2 >= dy) { err += dy; x0 += sx; }
-        if (e2 <= dx) { err += dx; y0 += sy; }
-    }
-}
-
-// 8-bit scaled Sine Lookup Table (0 to 89 degrees)
-// Values are sin(angle) * 256
-static const int16_t sin_lut[90] = {
-      0,   4,   8,  13,  17,  22,  26,  31,  35,  40,  44,  48,  53,  57,  61,  66,  70,  74,  78,  83,
-     87,  91,  95,  99, 103, 107, 111, 115, 119, 123, 127, 131, 135, 138, 142, 146, 149, 153, 156, 160,
-    163, 167, 170, 173, 177, 180, 183, 186, 189, 192, 195, 198, 200, 203, 206, 208, 211, 213, 216, 218,
-    220, 222, 224, 226, 228, 230, 232, 234, 235, 237, 238, 240, 241, 243, 244, 245, 246, 247, 248, 249,
-    250, 251, 252, 253, 253, 254, 254, 254, 255, 255
-};
-
-// Fast integer sine function (input 0-359 degrees)
-static inline int16_t fast_sin(int degree) {
-    if (degree < 0) degree += 360;
-    degree = degree % 360;
+uint8_t sd_send_command(uint8_t cmd, uint32_t arg, uint8_t crc) {
+    // Send a dummy byte to ensure the card is ready
+    spi_transfer(0xFF);
     
-    if (degree < 90)  return sin_lut[degree];
-    if (degree < 180) return sin_lut[180 - degree];
-    if (degree < 270) return -sin_lut[degree - 180];
-    return -sin_lut[360 - degree];
+    // Send the 6-byte command packet
+    spi_transfer(cmd | 0x40);          // Command index + Start bits
+    spi_transfer((arg >> 24) & 0xFF);  // Argument [31:24]
+    spi_transfer((arg >> 16) & 0xFF);  // Argument [23:16]
+    spi_transfer((arg >> 8)  & 0xFF);  // Argument [15:8]
+    spi_transfer(arg & 0xFF);          // Argument [7:0]
+    spi_transfer(crc);                 // CRC + Stop bit
+    
+    // Poll for the response (Valid responses are 0x00 to 0x7F)
+    // The MSB is always 0 in a valid R1 response.
+    uint8_t response;
+    for (int timeout = 20; timeout > 0; timeout--) {
+        response = spi_transfer(0xFF);
+        if (!(response & 0x80))
+            break;
+    }
+    
+    return response;
 }
 
-// Cosine is just sine shifted by 90 degrees
-static inline int16_t fast_cos(int degree) {
-    return fast_sin(degree + 90);
-}
 
-// Simple 3D Vector (Now strictly integer)
-typedef struct {
-    int x, y, z;
-} Vec3;
+int init_sdcard() {
+    uint8_t r1;
+
+    // Wake up card
+    SET_BIT(sdcard->csr, INIT_CLK);
+    SET_BIT(sdcard->csr, CLR_CS);
+    for (int i = 0; i < 10; i++) {
+        spi_transfer(0xFF); // send >= 74 idle clocks
+    }
+
+    // Enter SPI Mode (CMD0)
+    SET_BIT(sdcard->csr, SET_CS);
+    r1 = sd_send_command(0, 0x00000000, 0x95); // send CMD0
+    if (r1 != 0x01) return -1;
+
+    // Check Voltage (CMD8)
+    r1 = sd_send_command(8, 0x000001AA, 0x87); // send CMD8
+    if (r1 == 0x01) {
+        // Read the rest of the R7 response
+        spi_transfer(0xFF);
+        spi_transfer(0xFF);
+        spi_transfer(0xFF);
+        uint8_t r7_4 = spi_transfer(0xFF);
+        
+        if (r7_4 != 0xAA) return -1; // Voltage mismatch
+    } else {
+        return -1;
+    }
+
+    // Initialize Memory (ACMD41 Loop)
+    for (int timeout = 10000; timeout > 0; timeout--) {
+        // Send CMD55 (App Cmd prefix)
+        sd_send_command(55, 0x00000000, 0x65);
+        // Send ACMD41 with HCS (High Capacity Support) bit set
+        r1 = sd_send_command(41, 0x40000000, 0x77);
+
+        if (r1 != 0x01)
+            break;
+    }
+
+    if (r1 == 0x01) return -1;
+
+    // Set Block Size to 512 Bytes (CMD16)
+    r1 = sd_send_command(16, 512, 0x15);
+    if (r1 != 0x00) return -1;
+    
+    // Set CS high in-between transfers
+    SET_BIT(sdcard->csr, SET_CS);
+
+    return 0;
+}
 
 void __attribute__((noreturn, used)) bootloader(void) {
     // Copy .data section from ROM to RAM
     uint8_t* src = _sidata;
     uint8_t* dst = _sdata;
-    while (dst < _edata){
-        *dst++ = *src++;
-    }
+    while (dst < _edata) *dst++ = *src++;
     
     // Zero initialize .bss
     uint8_t* bss = _sbss;
-    while (bss < _ebss){
-        *bss++ = 0;
+    while (bss < _ebss) *bss++ = 0;
+
+    // Initialize SD Card
+    init_sdcard();
+
+    // Copy data to SDRAM
+    volatile uint32_t* dram = (volatile uint32_t *)SDRAM_BASE;
+
+    for (int blk = 0; blk < APP_SIZE/512; blk++) {
+        sdcard->blk_addr = blk;
+        SET_BIT(sdcard->csr, READ_BLK);
+
+        // wait for transfer to complete
+        while (READ_BIT(sdcard->csr, SPI_BUSY));
+
+        // copy data from SD buffer to DRAM
+        for (int i = 0; i < 512/4; i++) {
+            *dram++ = sdcard->buffer1[i];
+        }
     }
 
-    // 8 Vertices of a cube centered at origin
-    // Scaled up to 100 to maintain precision before division
-    Vec3 vertices[8] = {
-        {-100, -100, -100}, { 100, -100, -100}, { 100,  100, -100}, {-100,  100, -100},
-        {-100, -100,  100}, { 100, -100,  100}, { 100,  100,  100}, {-100,  100,  100}
-    };
+    /// BOZO handle SD card init errors (return -1)
 
-    // 12 Edges connecting the vertices
-    int edges[12][2] = {
-        {0,1}, {1,2}, {2,3}, {3,0}, // Back face
-        {4,5}, {5,6}, {6,7}, {7,4}, // Front face
-        {0,4}, {1,5}, {2,6}, {3,7}  // Connecting edges
-    };
+    // Jump to program entry
+    // BOZO TODO
 
-    // Angles are now standard integers representing degrees (0-359)
-    int angle_x = 0;
-    int angle_y = 0;
-    int angle_z = 0;
-
-    while (1) {
-        clear_screen(BLACK);
-
-        int projected[8][2];
-
-        // Pre-calculate trig values for the current frame
-        int cx = fast_cos(angle_x);
-        int sx = fast_sin(angle_x);
-        int cy = fast_cos(angle_y);
-        int sy = fast_sin(angle_y);
-        int cz = fast_cos(angle_z);
-        int sz = fast_sin(angle_z);
-
-        // Transform and project each vertex
-        for (int i = 0; i < 8; i++) {
-            int x = vertices[i].x;
-            int y = vertices[i].y;
-            int z = vertices[i].z;
-
-            // X-axis rotation
-            // We shift right by FIXED_SHIFT (8) to remove the 256 scaling introduced by the LUT
-            int y1 = ((y * cx) - (z * sx)) >> FIXED_SHIFT;
-            int z1 = ((y * sx) + (z * cx)) >> FIXED_SHIFT;
-
-            // Y-axis rotation
-            int x2 = ((x * cy) + (z1 * sy)) >> FIXED_SHIFT;
-            int z2 = (-(x * sy) + (z1 * cy)) >> FIXED_SHIFT;
-
-            // Z-axis rotation
-            int x3 = ((x2 * cz) - (y1 * sz)) >> FIXED_SHIFT;
-            int y3 = ((x2 * sz) + (y1 * cz)) >> FIXED_SHIFT;
-
-            // Perspective Projection
-            // Add Z_OFFSET to push it into the screen to prevent division by zero
-            int z_persp = z2 + Z_OFFSET; 
-            
-            projected[i][0] = ((x3 * FOV) / z_persp) + (SCREEN_W / 2);
-            projected[i][1] = ((y3 * FOV) / z_persp) + (SCREEN_H / 2);
-        }
-
-        // Draw the edges
-        for (int i = 0; i < 12; i++) {
-            draw_line(
-                projected[edges[i][0]][0], projected[edges[i][0]][1],
-                projected[edges[i][1]][0], projected[edges[i][1]][1],
-                WHITE
-            );
-        }
-
-        // Step the rotation angles (in integer degrees)
-        angle_x = (angle_x + 2) % 360;
-        angle_y = (angle_y + 3) % 360;
-        angle_z = (angle_z + 1) % 360;
-
-        // Busy-wait delay
-        asm("wfi");
-    }
+    while (1) {};
 }
