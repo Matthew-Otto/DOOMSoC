@@ -25,6 +25,7 @@ module sdcard_axi_interface #(
 
     logic sel_init_clk;
     logic init_clk;
+    logic sd_clk_gen;
 
     // very slow (400khz-100khz) SD card init clock generator
     clk_gen #(
@@ -39,10 +40,14 @@ module sdcard_axi_interface #(
 
     assign sd_clk_gen = sel_init_clk ? init_clk : sdcard_clk;
 
+`ifndef VERILATOR
     BUFG sd_clk_buf (
         .I(sd_clk_gen),
         .O(sd_clk)
     );
+`else
+    assign sd_clk = sd_clk_gen;
+`endif
 
     logic sd_clk_rst;
 

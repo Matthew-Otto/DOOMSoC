@@ -7,21 +7,24 @@ module clk_gen #(
     output logic clk_out
 );
 
-    //localparam logic [ACCUM_WIDTH-1:0] INCR = (64'(OUTPUT_FREQ) << ACCUM_WIDTH) / INPUT_FREQ;
+    localparam int CLK_DIV = INPUT_FREQ / OUTPUT_FREQ;
+    localparam int THRESH = CLK_DIV / 2;
+    localparam int COUNTER_WIDTH = $clog2(THRESH);
 
-    localparam int ACCUM_WIDTH = 16;
-    localparam logic [ACCUM_WIDTH-1:0] INCR = (OUTPUT_FREQ / INPUT_FREQ) << ACCUM_WIDTH;
-
-    logic [ACCUM_WIDTH-1:0] accum;
+    logic [COUNTER_WIDTH-1:0] counter;
 
     always_ff @(posedge clk_in) begin
         if (rst) begin
-            accum <= '0;
+            counter <= '0;
+            clk_out <= 1'b0;
         end else begin
-            accum <= accum + INCR;
+            if (counter == THRESH - 1) begin
+                counter <= '0;
+                clk_out <= ~clk_out;
+            end else begin
+                counter <= counter + 1'b1;
+            end
         end
     end
-
-    assign clk_out = accum[ACCUM_WIDTH-1];
 
 endmodule : clk_gen

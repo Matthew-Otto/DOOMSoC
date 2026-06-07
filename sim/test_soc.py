@@ -23,6 +23,7 @@ async def test_soc(dut):
 
     clk = dut.sys_clk
     pclk = dut.p_clk
+    sd_clk = dut.sdcard_clk
     reset = dut.sys_clk_rst
 
     # init system
@@ -30,6 +31,7 @@ async def test_soc(dut):
     sys_clk_ps = round((1/81_000_000) * 1e12)
     p_clk_ps = round((1/81_000_000) * 1e12) #39.682 ns
     cocotb.start_soon(Clock(clk, sys_clk_ps, unit="ps").start())
+    cocotb.start_soon(Clock(sd_clk, sys_clk_ps*4, unit="ps").start())
     cocotb.start_soon(Clock(pclk, p_clk_ps, unit="ps").start())
 
     cocotb.start_soon(log_sim_speed(dut, clk))
