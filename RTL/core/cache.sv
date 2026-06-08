@@ -2,6 +2,7 @@
 // 256 bit cachelines
 // direct mapped
 // write through
+// TODO non-caching reads
 
 module cache #(
     parameter int MASTER_ID,
@@ -27,6 +28,20 @@ module cache #(
 );
 
     localparam CACHELINE_OFFSET = 5;
+
+
+    ////////////////////////////////////////////////////////////////////////
+    //// Address Lookup ////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+
+    logic uncacheable_addr;
+
+    always_comb begin
+        uncacheable_addr = 1'b0;
+        casez (core_addr)
+            32'h4???_???? : uncacheable_addr = 1'b1;
+        endcase
+    end
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -131,8 +146,6 @@ module cache #(
         .rd_data(ds_rd_data)
     );
 
-    assign core_read_data = ds_rd_data;
-
     ////////////////////////////////////////////////////////////////////////
     //// FSM ///////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
@@ -146,8 +159,10 @@ module cache #(
         WRITE_WAIT_DATA,
         WRITE_WAIT_ADDR,
         WRITE_WAIT,
-        READ,
+        CACHE_READ,
         FILL_CACHE,
+        READ_WORD,
+        READ_WORD_WAIT,
         CACHE_FILLED
     } state, next_state;
 
@@ -189,8 +204,13 @@ module cache #(
 
         m_axi.aw_valid = 1'b0;
         m_axi.w_valid = 1'b0;
+
         m_axi.ar_valid = 1'b0;
+        m_axi.ar_addr = 'x;
+        m_axi.ar_len = 'x;
+
         m_axi.r_ready = 1'b0;
+        core_read_data = ds_rd_data;
         
 
         case (state)
@@ -214,8 +234,12 @@ module cache #(
                     next_state = WRITE;
                 end else if (core_read_val) begin
                     latch_address = 1'b1;
-                    tag_read = 1'b1;
-                    next_state = READ;
+                    if (uncacheable_addr) begin
+                        next_state = READ_WORD;
+                    end else begin
+                        tag_read = 1'b1;
+                        next_state = CACHE_READ;
+                    end
                 end
             end
 
@@ -237,8 +261,12 @@ module cache #(
                             next_state = WRITE;
                         end else if (core_read_val) begin
                             latch_address = 1'b1;
-                            tag_read = 1'b1;
-                            next_state = READ;
+                            if (uncacheable_addr) begin
+                                next_state = READ_WORD;
+                            end else begin
+                                tag_read = 1'b1;
+                                next_state = CACHE_READ;
+                            end
                         end else begin
                             next_state = IDLE;
                         end
@@ -264,8 +292,12 @@ module cache #(
                             next_state = WRITE;
                         end else if (core_read_val) begin
                             latch_address = 1'b1;
-                            tag_read = 1'b1;
-                            next_state = READ;
+                            if (uncacheable_addr) begin
+                                next_state = READ_WORD;
+                            end else begin
+                                tag_read = 1'b1;
+                                next_state = CACHE_READ;
+                            end
                         end else begin
                             next_state = IDLE;
                         end
@@ -288,8 +320,12 @@ module cache #(
                         next_state = WRITE;
                     end else if (core_read_val) begin
                         latch_address = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = READ;
+                        if (uncacheable_addr) begin
+                            next_state = READ_WORD;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = CACHE_READ;
+                        end
                     end else begin
                         next_state = IDLE;
                     end
@@ -307,15 +343,19 @@ module cache #(
                         next_state = WRITE;
                     end else if (core_read_val) begin
                         latch_address = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = READ;
+                        if (uncacheable_addr) begin
+                            next_state = READ_WORD;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = CACHE_READ;
+                        end
                     end else begin
                         next_state = IDLE;
                     end
                 end
             end
 
-            READ : begin
+            CACHE_READ : begin
                 core_rdy = (tag_hit || core_flush);
                 core_read_data_val = tag_hit;
 
@@ -330,8 +370,12 @@ module cache #(
                     // pipeline reads
                     end else if (core_read_val) begin
                         latch_address = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = READ;
+                        if (uncacheable_addr) begin
+                            next_state = READ_WORD;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = CACHE_READ;
+                        end
 
                     end else begin
                         next_state = IDLE;
@@ -339,6 +383,8 @@ module cache #(
 
                 end else begin
                     m_axi.ar_valid = 1'b1;
+                    m_axi.ar_addr = fill_addr;
+                    m_axi.ar_len = 8'd7; // 8 beats (ARLEN is length - 1)
                     trigger_fill = 1'b1;
                     fill_in_progress = 1'b1;
                     next_state = FILL_CACHE;
@@ -379,10 +425,47 @@ module cache #(
                     next_state = WRITE;
                 end else if (core_read_val) begin
                     latch_address = 1'b1;
-                    tag_read = 1'b1;
-                    next_state = READ;
+                    if (uncacheable_addr) begin
+                        next_state = READ_WORD;
+                    end else begin
+                        tag_read = 1'b1;
+                        next_state = CACHE_READ;
+                    end
                 end else begin
                     next_state = IDLE;
+                end
+            end
+
+            READ_WORD : begin
+                m_axi.ar_valid = 1'b1;
+                m_axi.ar_addr = addr_buffer;
+                m_axi.ar_len = 8'd0; // read a single word
+                next_state = READ_WORD_WAIT;
+            end
+
+            READ_WORD_WAIT : begin
+                m_axi.r_ready = 1'b1;
+                core_read_data = m_axi.r_data;
+                if (m_axi.r_valid) begin
+                    core_read_data_val = 1'b1;
+                    
+                    core_rdy = 1'b1;
+                    if (core_write_val) begin
+                        latch_address = 1'b1;
+                        latch_write_data = 1'b1;
+                        tag_read = 1'b1;
+                        next_state = WRITE;
+                    end else if (core_read_val) begin
+                        latch_address = 1'b1;
+                        if (uncacheable_addr) begin
+                            next_state = READ_WORD;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = CACHE_READ;
+                        end
+                    end else begin
+                        next_state = IDLE;
+                    end
                 end
             end
         endcase
@@ -400,8 +483,6 @@ module cache #(
     assign m_axi.w_last   = 1'b1;
     assign m_axi.b_ready  = 1'b1;
 
-    assign m_axi.ar_addr  = fill_addr;
-    assign m_axi.ar_len   = 8'd7;     // 8 beats (ARLEN is length - 1)
     assign m_axi.ar_size  = 3'b010;   // 4 bytes per beat (32-bit bus)
     assign m_axi.ar_burst = 2'b01;    // INCR burst type
     assign m_axi.ar_id    = MASTER_ID;
