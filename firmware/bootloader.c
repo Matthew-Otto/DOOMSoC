@@ -85,8 +85,7 @@ int init_sdcard() {
     uint8_t r1;
 
     // Wake up card
-    SET_BIT(sdcard->csr, INIT_CLK);
-    SET_BIT(sdcard->csr, CLR_CS);
+    SET_BIT(sdcard->csr, INIT_CLK | CLR_CS);
     for (int i = 0; i < 10; i++) {
         spi_transfer(0xFF); // send >= 74 idle clocks
     }
@@ -122,6 +121,9 @@ int init_sdcard() {
     }
 
     if (r1 == 0x01) return -1;
+
+    // Increase clock speed
+    CLEAR_BIT(sdcard->csr, INIT_CLK);
 
     // Set Block Size to 512 Bytes (CMD16)
     r1 = sd_send_command(16, 512, 0x15);

@@ -40,7 +40,7 @@ async def test_soc(dut):
     dut.sclk_pll_lock.value = 1
     await FallingEdge(reset)
 
-    await ClockCycles(clk, 100000)
+    await ClockCycles(clk, 1000000)
     await ClockCycles(clk, 10)
 
 
@@ -93,7 +93,7 @@ def test_runner():
         gui=True,
         test_args=[
             "+verilator+rand+reset+2",
-            "+verilator+seed+1234",
+            "+verilator+seed+12345",
         ],
     )
 

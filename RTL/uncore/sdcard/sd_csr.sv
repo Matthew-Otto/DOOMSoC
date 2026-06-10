@@ -11,7 +11,6 @@ module sd_csr (
     output logic        block_write,
     output logic        block_read,
 
-    input  logic        busy,
     input  logic        success,
     input  logic        error,
 
@@ -189,6 +188,7 @@ module sd_csr (
     logic new_init_clk;
     logic write_block_addr;
     logic [7:0] spi_byte;
+    logic busy;
 
     //// Write mux
     always_comb begin
@@ -225,12 +225,16 @@ module sd_csr (
         else if (write_stat)
             init_clk <= new_init_clk;
 
-        if (rst)
+        if (rst) begin
             spi_byte <= '0;
-        else if (spi_write)
+            busy <= 1'b0;
+        end else if (spi_write) begin
             spi_byte <= spi_data_wr;
-        else if (spi_read)
+            busy <= 1'b1;
+        end else if (spi_read) begin
             spi_byte <= spi_data_rd;
+            busy <= 1'b0;
+        end
 
         if (rst)
             sd_block_addr <= '0;
@@ -242,7 +246,7 @@ module sd_csr (
     always_ff @(posedge clk) begin
         if (rd_en) begin
             case (rd_addr[3:0])
-                4'h0 : rd_data_buffer <= {21'b0,error,success,busy,8'b0};
+                4'h0 : rd_data_buffer <= {21'b0,error,success,busy,7'b0,init_clk};
                 4'h4 : rd_data_buffer <= {24'b0,spi_byte};
                 4'h8 : rd_data_buffer <= sd_block_addr;
                 default;

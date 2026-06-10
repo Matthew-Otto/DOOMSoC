@@ -229,7 +229,7 @@ module top #(
     localparam axi_pkg::xbar_cfg_t XbarCfg = '{
         NoSlvPorts:         2, // 2 Masters
         NoMstPorts:         4, // 4 Slaves
-        MaxMstTrans:        0, // Max outstanding transactions
+        MaxMstTrans:        1, // Max outstanding transactions
         MaxSlvTrans:        1,
         FallThrough:        1'b1,
         LatencyMode:        axi_pkg::CUT_ALL_PORTS, // CUT_MST_PORTS

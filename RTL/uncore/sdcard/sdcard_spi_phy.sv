@@ -1,8 +1,14 @@
 module sdcard_spi_phy #(
-    parameter int ADDR_WIDTH=8
+    parameter int ADDR_WIDTH,
+    parameter int SD_CLK_FREQ
 ) (
     input  logic clk,
     input  logic rst,
+
+    input  logic sdcard_clk,
+    input  logic sdcard_clk_rst,
+
+    input  logic sel_init_clk,
 
     // manual SPI byte interface
     input  logic       spi_send_byte,
@@ -12,7 +18,6 @@ module sdcard_spi_phy #(
 
     input  logic       core_set_cs,
     input  logic       core_clear_cs,
-    output logic       busy,
     output logic       success,
     output logic       error,
 
@@ -46,11 +51,12 @@ module sdcard_spi_phy #(
 
 
     // SPI driver
-    logic [7:0] tx_byte;
-    logic       tx_byte_valid;
-    logic       tx_byte_ready;
-    logic [7:0] rx_byte;
-    logic       rx_byte_valid;
+    logic [7:0] wr_byte;
+    logic       wr_byte_valid;
+    logic       wr_byte_ready;
+    logic [7:0] rd_byte;
+    logic       rd_byte_valid;
+    logic       rd_byte_ready;
     // chipselect
     logic set_cs, clear_cs;
 
@@ -92,13 +98,15 @@ module sdcard_spi_phy #(
         next_state = state;
         next_idx = idx;
 
-        busy = 1'b1;
+        success = 1'b0; // BOZO
+        error = 1'b0; // BOZO
 
         set_read_active = 1'b0;
         set_write_active = 1'b0;
 
-        tx_byte = '0;
-        tx_byte_valid = 1'b0;
+        wr_byte = '0;
+        wr_byte_valid = 1'b0;
+        rd_byte_ready = 1'b1;
         spi_byte_return = 1'b0;
 
         write_en = '0;
@@ -114,19 +122,18 @@ module sdcard_spi_phy #(
             end
 
             IDLE : begin
-                tx_byte = DUMMY_BYTE;
-                if (tx_byte_ready) begin
-                    busy = 1'b0;
+                wr_byte = DUMMY_BYTE;
+                if (wr_byte_ready) begin
                     if (spi_send_byte) begin
-                        tx_byte_valid = 1'b1;
-                        tx_byte = spi_wr_byte;
+                        wr_byte_valid = 1'b1;
+                        wr_byte = spi_wr_byte;
                         next_state = SINGLE_TRANSFR;
                     end if (read_block) begin
-                        tx_byte_valid = 1'b1;
+                        wr_byte_valid = 1'b1;
                         clear_cs = 1'b1;
                         next_state = SEND_READ_CMD;
                     end else if (write_block) begin
-                        tx_byte_valid = 1'b1;
+                        wr_byte_valid = 1'b1;
                         clear_cs = 1'b1;
                         next_state = SEND_WRITE_CMD;
                     end
@@ -134,36 +141,36 @@ module sdcard_spi_phy #(
             end
 
             SINGLE_TRANSFR : begin
-                if (rx_byte_valid) begin
+                if (rd_byte_valid) begin
                     spi_byte_return = 1'b1;
                     next_state = IDLE;
                 end
             end
 
             SEND_READ_CMD : begin
-                tx_byte = CMD17;
-                tx_byte_valid = 1'b1;
+                wr_byte = CMD17;
+                wr_byte_valid = 1'b1;
                 set_read_active = 1'b1;
-                if (tx_byte_ready) begin
+                if (wr_byte_ready) begin
                     next_idx = 3;
                     next_state = SEND_ADDR;
                 end
             end
 
             SEND_WRITE_CMD : begin
-                tx_byte = CMD24;
-                tx_byte_valid = 1'b1;
+                wr_byte = CMD24;
+                wr_byte_valid = 1'b1;
                 set_write_active = 1'b1;
-                if (tx_byte_ready) begin
+                if (wr_byte_ready) begin
                     next_idx = 3;
                     next_state = SEND_ADDR;
                 end
             end
 
             SEND_ADDR : begin
-                tx_byte = block_addr[idx*8+:8];
-                tx_byte_valid = 1'b1;
-                if (tx_byte_ready) begin
+                wr_byte = block_addr[idx*8+:8];
+                wr_byte_valid = 1'b1;
+                if (wr_byte_ready) begin
                     if (idx == 0)
                         next_state = SEND_CHKSUM;
                     else
@@ -172,19 +179,19 @@ module sdcard_spi_phy #(
             end
 
             SEND_CHKSUM : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = END_BIT;
-                if (tx_byte_ready)
+                wr_byte_valid = 1'b1;
+                wr_byte = END_BIT;
+                if (wr_byte_ready)
                     next_state = WAIT_R1;
             end
 
             WAIT_R1 : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
-                if (rx_byte_valid) begin
-                    if (!rx_byte[7]) begin
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
+                if (rd_byte_valid) begin
+                    if (!rd_byte[7]) begin
                         next_idx = 0;
-                        if (|rx_byte[6:0])
+                        if (|rd_byte[6:0])
                             next_state = ERROR;
                         else if (read_active)
                             next_state = READ_GAP;
@@ -195,18 +202,18 @@ module sdcard_spi_phy #(
             end
 
             READ_GAP : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
-                if (rx_byte_valid && (rx_byte == DATA_TOKEN))
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
+                if (rd_byte_valid && (rd_byte == DATA_TOKEN))
                     next_state = READ_BLOCK;
             end
 
             READ_BLOCK : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
 
                 addr = idx[8:2];
-                if (rx_byte_valid) begin
+                if (rd_byte_valid) begin
                     write_en = 1'b1 << idx[1:0];
                     if (idx == 511) begin
                         next_idx = 1;
@@ -218,9 +225,9 @@ module sdcard_spi_phy #(
             end
 
             READ_CRC : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
-                if (tx_byte_ready) begin
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
+                if (wr_byte_ready) begin
                     if (idx == 0) begin
                         set_cs = 1'b1;
                         next_state = IDLE;
@@ -231,26 +238,26 @@ module sdcard_spi_phy #(
             end
 
             WRITE_GAP : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
-                if (tx_byte_ready)
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
+                if (wr_byte_ready)
                    next_state = WRITE_START;
             end
 
             WRITE_START : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DATA_TOKEN;
-                if (tx_byte_ready) begin
+                wr_byte_valid = 1'b1;
+                wr_byte = DATA_TOKEN;
+                if (wr_byte_ready) begin
                     next_idx = 0;
                     next_state = WRITE_BLOCK;
                 end
             end
 
             WRITE_BLOCK : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = read_data[idx[1:0]*8+:8];
+                wr_byte_valid = 1'b1;
+                wr_byte = read_data[idx[1:0]*8+:8];
                 addr = idx[8:2];
-                if (tx_byte_ready) begin
+                if (wr_byte_ready) begin
                     if (idx == 511) begin
                         next_idx = 1;
                         next_state = WRITE_CRC;
@@ -261,9 +268,9 @@ module sdcard_spi_phy #(
             end
 
             WRITE_CRC : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
-                if (tx_byte_ready) begin
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
+                if (wr_byte_ready) begin
                     if (idx == 0)
                         next_state = WAIT_WR_RESP;
                     else
@@ -272,25 +279,25 @@ module sdcard_spi_phy #(
             end
 
             WAIT_WR_RESP : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
-                if (rx_byte_valid) begin
-                    if (!rx_byte[7]) begin
-                        if (rx_byte[4:0] == 5'h5)
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
+                if (rd_byte_valid) begin
+                    if (!rd_byte[7]) begin
+                        if (rd_byte[4:0] == 5'h5)
                             next_state = WAIT_WR_COMMIT;
-                        else if (rx_byte[4:0] == 5'hB) // CRC error
+                        else if (rd_byte[4:0] == 5'hB) // CRC error
                             next_state = ERROR;
-                        else if (rx_byte[4:0] == 5'hD) // other Error
+                        else if (rd_byte[4:0] == 5'hD) // other Error
                             next_state = ERROR;
                     end
                 end
             end
 
             WAIT_WR_COMMIT : begin
-                tx_byte_valid = 1'b1;
-                tx_byte = DUMMY_BYTE;
-                if (rx_byte_valid) begin
-                    if (rx_byte == 8'hFF) begin
+                wr_byte_valid = 1'b1;
+                wr_byte = DUMMY_BYTE;
+                if (rd_byte_valid) begin
+                    if (rd_byte == 8'hFF) begin
                         set_cs = 1'b1;
                         next_state = IDLE;
                     end
@@ -311,13 +318,99 @@ module sdcard_spi_phy #(
             write_active <= 1'b1;
     end
 
-    assign write_data = {4{rx_byte}};
-    assign spi_rd_byte = rx_byte;
+    assign write_data = {4{rd_byte}};
+    assign spi_rd_byte = rd_byte;
 
+
+    always_ff @(posedge clk) begin
+        if (rst || set_cs || core_set_cs) cs <= 1'b1;
+        else if (clear_cs || core_clear_cs) cs <= 1'b0;
+    end
+
+
+    ////////////////////////////////////////////////////////////////////////
+    //// SPI clock generation //////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+
+    logic init_clk;
+    logic sd_clk_gen;
+    logic sd_clk;
+
+    // very slow (400khz-100khz) SD card init clock generator
+    clk_gen #(
+        .INPUT_FREQ(SD_CLK_FREQ),
+        .OUTPUT_FREQ(400_000)
+    ) clk_gen_i (
+        .clk_in(sdcard_clk),
+        .rst(sdcard_clk_rst),
+        .clk_out(init_clk)
+    );
+
+    assign sd_clk_gen = sel_init_clk ? init_clk : sdcard_clk;
+
+    `ifndef VERILATOR
+        BUFG sd_clk_buf (
+            .I(sd_clk_gen),
+            .O(sd_clk)
+        );
+    `else
+        assign sd_clk = sd_clk_gen;
+    `endif
+
+    logic sd_clk_rst;
+
+    reset_sync sys_reset_gen (
+        .async_reset(sdcard_clk_rst),
+        .sync_clk(sd_clk),
+        .sync_reset(sd_clk_rst)
+    );
+    
+
+    ////////////////////////////////////////////////////////////////////////
+    //// SPI driver ////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////
+
+    logic tx_byte_ready;
+    logic tx_byte_valid;
+    logic [7:0] tx_byte;
+    logic rx_byte_valid;
+    logic [7:0] rx_byte;
+
+    // CORE -> SPI CDC
+    cdc_fifo_1deep #(
+        .WIDTH(8)
+    ) spi_wr_data_cdc (
+        .w_clk(clk),
+        .w_rst(rst),
+        .w_rdy(wr_byte_ready),
+        .w_val(wr_byte_valid),
+        .w_data(wr_byte),
+        .r_clk(sd_clk),
+        .r_rst(sd_clk_rst),
+        .r_rdy(tx_byte_ready),
+        .r_val(tx_byte_valid),
+        .r_data(tx_byte)
+    );
+
+    // SPI -> CORE CDC
+    cdc_fifo_1deep #(
+        .WIDTH(8)
+    ) spi_rd_data_cdc (
+        .w_clk(sd_clk),
+        .w_rst(sd_clk_rst),
+        .w_rdy(),
+        .w_val(rx_byte_valid),
+        .w_data(rx_byte),
+        .r_clk(clk),
+        .r_rst(rst),
+        .r_rdy(rd_byte_ready),
+        .r_val(rd_byte_valid),
+        .r_data(rd_byte)
+    );
 
     spi spi_i (
-        .clk,
-        .rst,
+        .clk(sd_clk),
+        .rst(sd_clk_rst),
         .tx_byte,
         .tx_byte_valid,
         .tx_byte_ready,
@@ -327,10 +420,5 @@ module sdcard_spi_phy #(
         .mosi,
         .miso
     );
-
-    always_ff @(posedge clk) begin
-        if (rst || set_cs || core_set_cs) cs <= 1'b1;
-        else if (clear_cs || core_clear_cs) cs <= 1'b0;
-    end
 
 endmodule : sdcard_spi_phy

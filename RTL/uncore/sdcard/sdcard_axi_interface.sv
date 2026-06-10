@@ -20,45 +20,6 @@ module sdcard_axi_interface #(
 );
 
     ////////////////////////////////////////////////////////////////////////
-    //// Clocks ////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////
-
-    logic sel_init_clk;
-    logic init_clk;
-    logic sd_clk_gen;
-
-    // very slow (400khz-100khz) SD card init clock generator
-    clk_gen #(
-        .INPUT_FREQ(SD_CLK_FREQ),
-        .OUTPUT_FREQ(400_000)
-    ) clk_gen_i (
-        .clk_in(sdcard_clk),
-        .rst(sdcard_clk_rst),
-        .clk_out(init_clk)
-    );
-
-
-    assign sd_clk_gen = sel_init_clk ? init_clk : sdcard_clk;
-
-`ifndef VERILATOR
-    BUFG sd_clk_buf (
-        .I(sd_clk_gen),
-        .O(sd_clk)
-    );
-`else
-    assign sd_clk = sd_clk_gen;
-`endif
-
-    logic sd_clk_rst;
-
-    reset_sync sys_reset_gen (
-        .async_reset(sdcard_clk_rst),
-        .sync_clk(sd_clk),
-        .sync_reset(sd_clk_rst)
-    );
-
-
-    ////////////////////////////////////////////////////////////////////////
     //// AXI Bus ///////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
     AXI_BUS #(
@@ -72,11 +33,6 @@ module sdcard_axi_interface #(
         .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
         .AXI_DATA_WIDTH(AXI_DATA_WIDTH)
     ) axi_lite_csr ();
-    
-    AXI_LITE #(
-        .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
-        .AXI_DATA_WIDTH(AXI_DATA_WIDTH)
-    ) axi_lite_csr_cdc ();
 
 
     //// Route to Buffer or CSRs based on address
@@ -125,24 +81,12 @@ module sdcard_axi_interface #(
         .mst(axi_lite_csr)
     );
 
-    // Move AXI lite bus to SD clock domain
-    axi_lite_cdc_intf #(
-        .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
-        .AXI_DATA_WIDTH(AXI_DATA_WIDTH)
-    ) csr_cdc (
-        .src_clk_i(bus_clk),
-        .src_rst_ni(~bus_clk_rst),
-        .src(axi_lite_csr),
-        .dst_clk_i(sd_clk),
-        .dst_rst_ni(~sd_clk_rst),
-        .dst(axi_lite_csr_cdc)
-    );
-
 
     ////////////////////////////////////////////////////////////////////////
     //// Control / Status Registers ////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
+    logic        sel_init_clk;
     logic        set_cs;
     logic        clear_cs;
     logic        write_block;
@@ -157,15 +101,14 @@ module sdcard_axi_interface #(
     logic [31:0] block_addr;
 
     sd_csr sd_csr_i (
-        .clk(sd_clk),
-        .rst(sd_clk_rst),
-        .s_axi(axi_lite_csr_cdc),
+        .clk(bus_clk),
+        .rst(bus_clk_rst),
+        .s_axi(axi_lite_csr),
         .init_clk(sel_init_clk),
         .set_cs,
         .clear_cs,
         .block_write(write_block),
         .block_read(read_block),
-        .busy,
         .success,
         .error,
         .spi_write,
@@ -207,7 +150,7 @@ module sdcard_axi_interface #(
     );
 
     tdp_bram_be #(
-        .ADDR_WIDTH(BUFFER_ADDR_WIDTH),
+        .ADDR_WIDTH(BUFFER_ADDR_WIDTH-7), // BOZO
         .DATA_WIDTH(AXI_DATA_WIDTH)
     ) data_buffer (
         .clk_a(bus_clk),
@@ -215,7 +158,7 @@ module sdcard_axi_interface #(
         .wr_en_a(axi_wr_en),
         .wr_data_a(axi_wr_data),
         .rd_data_a(axi_rd_data),
-        .clk_b(sd_clk),
+        .clk_b(bus_clk),
         .addr_b(sd_buffer_addr),
         .wr_en_b(sd_wr_en),
         .wr_data_b(sd_wr_data),
@@ -233,24 +176,25 @@ module sdcard_axi_interface #(
     logic [31:0] write_data;
 
     sdcard_spi_phy #(
-        .ADDR_WIDTH(BUFFER_ADDR_WIDTH)
+        .ADDR_WIDTH(BUFFER_ADDR_WIDTH),
+        .SD_CLK_FREQ(SD_CLK_FREQ)
     ) sdcard_spi_phy_i (
-        .clk(sd_clk),
-        .rst(sd_clk_rst),
-        .core_set_cs(set_cs),
-        .core_clear_cs(clear_cs),
-        .busy,
-        .success,
-        .error,
+        .clk(bus_clk),
+        .rst(bus_clk_rst),
+        .sdcard_clk,
+        .sdcard_clk_rst,
+        .sel_init_clk,
         .spi_send_byte(spi_write),
         .spi_wr_byte(spi_data_wr),
         .spi_byte_return(spi_read),
         .spi_rd_byte(spi_data_rd),
-
+        .core_set_cs(set_cs),
+        .core_clear_cs(clear_cs),
+        .success,
+        .error,
         .write_block,
         .read_block,
         .block_addr,
-
         .addr(sd_buffer_addr),
         .read_data(sd_rd_data),
         .write_en(sd_wr_en),
@@ -264,29 +208,3 @@ module sdcard_axi_interface #(
     assign sd_dat[2:1] = '0;
 
 endmodule : sdcard_axi_interface
-
-// decode address into two sections, one for CSR, one for buffer
-
-/*
-is_csr_access = (ADDR[11:8] == 4'h0)
-is_bram_access = (ADDR[11:8] == 4'h8)
-*/
-
-// CTRL Registers
-// 0x00,CTRL,W
-// [0]: read (autoclear)
-// [1]: write (autoclear)
-// 0x04,STATUS,R
-// [0]: read in progress
-// [1]: write in progress
-// [2]: block transfer complete
-// [3]: error
-// 0x08,SD_ADDR,R/W,The 32-bit block address to read/write on the SD Card.
-// 0x0C,SPI_RAW,R/W,"Direct 8-bit TX/RX register for sending individual commands (CMD0, CMD8, etc.) during initialization."
-
-// implement true dual port bram to buffer 512B blocks and cross clock domains
-
-
-// act as axi interface
-// CDC from bus_clk_freq to sdcard_freq
-// FSM to init the sdcard

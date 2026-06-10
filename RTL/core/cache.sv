@@ -2,7 +2,6 @@
 // 256 bit cachelines
 // direct mapped
 // write through
-// TODO non-caching reads
 
 module cache #(
     parameter int MASTER_ID,
@@ -486,5 +485,20 @@ module cache #(
     assign m_axi.ar_size  = 3'b010;   // 4 bytes per beat (32-bit bus)
     assign m_axi.ar_burst = 2'b01;    // INCR burst type
     assign m_axi.ar_id    = MASTER_ID;
+
+    // Tie off unused signals
+    assign m_axi.aw_atop   = '0;
+    assign m_axi.aw_lock   = '0;
+    assign m_axi.aw_cache  = '0;
+    assign m_axi.aw_prot   = '0;
+    assign m_axi.aw_qos    = '0;
+    assign m_axi.aw_region = '0;
+    assign m_axi.aw_user   = '0;
+    assign m_axi.ar_lock   = '0;
+    assign m_axi.ar_cache  = '0;
+    assign m_axi.ar_prot   = '0;
+    assign m_axi.ar_qos    = '0;
+    assign m_axi.ar_region = '0;
+    assign m_axi.ar_user   = '0;
 
 endmodule : cache
