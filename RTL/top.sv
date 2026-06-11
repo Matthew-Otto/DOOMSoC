@@ -220,7 +220,7 @@ module top #(
 
     localparam int AXI_ADDR_WIDTH = 32;
     localparam int AXI_DATA_WIDTH = 32;
-    localparam int AXI_ID_WIDTH   = 1;
+    localparam int AXI_ID_WIDTH   = 2;
     localparam int AXI_USER_WIDTH = 1;
 
     // Generate AXI types using PULP macros

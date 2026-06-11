@@ -160,8 +160,12 @@ module cache #(
         WRITE_WAIT,
         CACHE_READ,
         FILL_CACHE,
-        READ_WORD,
-        READ_WORD_WAIT,
+        NOCACHE_READ,
+        NOCACHE_READ_WAIT,
+        NOCACHE_WRITE, 
+        NOCACHE_WRITE_WAIT_DATA,
+        NOCACHE_WRITE_WAIT_ADDR,
+        NOCACHE_WRITE_WAIT_RESP, // Writes to uncacheable addresses stall
         CACHE_FILLED
     } state, next_state;
 
@@ -202,9 +206,11 @@ module cache #(
         ds_wr_data = m_axi.r_data;
 
         m_axi.aw_valid = 1'b0;
+        m_axi.aw_id = {MASTER_ID,1'bx};
         m_axi.w_valid = 1'b0;
 
         m_axi.ar_valid = 1'b0;
+        m_axi.ar_id = {MASTER_ID,1'bx};
         m_axi.ar_addr = 'x;
         m_axi.ar_len = 'x;
 
@@ -229,12 +235,16 @@ module cache #(
                 if (core_write_val) begin
                     latch_address = 1'b1;
                     latch_write_data = 1'b1;
-                    tag_read = 1'b1;
-                    next_state = WRITE;
+                    if (uncacheable_addr) begin
+                        next_state = NOCACHE_WRITE;
+                    end else begin
+                        tag_read = 1'b1;
+                        next_state = WRITE;
+                    end
                 end else if (core_read_val) begin
                     latch_address = 1'b1;
                     if (uncacheable_addr) begin
-                        next_state = READ_WORD;
+                        next_state = NOCACHE_READ;
                     end else begin
                         tag_read = 1'b1;
                         next_state = CACHE_READ;
@@ -248,6 +258,7 @@ module cache #(
                 ds_wr_data = write_data_buffer;
 
                 m_axi.aw_valid = 1'b1;
+                m_axi.aw_id = {MASTER_ID,1'b0};
                 m_axi.w_valid = 1'b1;
 
                 case ({m_axi.aw_ready, m_axi.w_ready})
@@ -256,12 +267,16 @@ module cache #(
                         if (core_write_val) begin
                             latch_address = 1'b1;
                             latch_write_data = 1'b1;
-                            tag_read = 1'b1;
-                            next_state = WRITE;
+                            if (uncacheable_addr) begin
+                                next_state = NOCACHE_WRITE;
+                            end else begin
+                                tag_read = 1'b1;
+                                next_state = WRITE;
+                            end
                         end else if (core_read_val) begin
                             latch_address = 1'b1;
                             if (uncacheable_addr) begin
-                                next_state = READ_WORD;
+                                next_state = NOCACHE_READ;
                             end else begin
                                 tag_read = 1'b1;
                                 next_state = CACHE_READ;
@@ -279,6 +294,7 @@ module cache #(
 
             WRITE_WAIT : begin
                 m_axi.aw_valid = 1'b1;
+                m_axi.aw_id = {MASTER_ID,1'b0};
                 m_axi.w_valid = 1'b1;
 
                 case ({m_axi.aw_ready, m_axi.w_ready})
@@ -287,12 +303,16 @@ module cache #(
                         if (core_write_val) begin
                             latch_address = 1'b1;
                             latch_write_data = 1'b1;
-                            tag_read = 1'b1;
-                            next_state = WRITE;
+                            if (uncacheable_addr) begin
+                                next_state = NOCACHE_WRITE;
+                            end else begin
+                                tag_read = 1'b1;
+                                next_state = WRITE;
+                            end
                         end else if (core_read_val) begin
                             latch_address = 1'b1;
                             if (uncacheable_addr) begin
-                                next_state = READ_WORD;
+                                next_state = NOCACHE_READ;
                             end else begin
                                 tag_read = 1'b1;
                                 next_state = CACHE_READ;
@@ -315,12 +335,16 @@ module cache #(
                     if (core_write_val) begin
                         latch_address = 1'b1;
                         latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = WRITE;
+                        if (uncacheable_addr) begin
+                            next_state = NOCACHE_WRITE;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = WRITE;
+                        end
                     end else if (core_read_val) begin
                         latch_address = 1'b1;
                         if (uncacheable_addr) begin
-                            next_state = READ_WORD;
+                            next_state = NOCACHE_READ;
                         end else begin
                             tag_read = 1'b1;
                             next_state = CACHE_READ;
@@ -333,17 +357,22 @@ module cache #(
 
             WRITE_WAIT_ADDR : begin
                 m_axi.aw_valid = 1'b1;
+                m_axi.aw_id = {MASTER_ID,1'b0};
                 if (m_axi.aw_ready) begin
                     core_rdy = 1'b1;
                     if (core_write_val) begin
                         latch_address = 1'b1;
                         latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = WRITE;
+                        if (uncacheable_addr) begin
+                            next_state = NOCACHE_WRITE;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = WRITE;
+                        end
                     end else if (core_read_val) begin
                         latch_address = 1'b1;
                         if (uncacheable_addr) begin
-                            next_state = READ_WORD;
+                            next_state = NOCACHE_READ;
                         end else begin
                             tag_read = 1'b1;
                             next_state = CACHE_READ;
@@ -363,14 +392,18 @@ module cache #(
                     if (core_write_val) begin
                         latch_address = 1'b1;
                         latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = WRITE;
+                        if (uncacheable_addr) begin
+                            next_state = NOCACHE_WRITE;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = WRITE;
+                        end
                     
                     // pipeline reads
                     end else if (core_read_val) begin
                         latch_address = 1'b1;
                         if (uncacheable_addr) begin
-                            next_state = READ_WORD;
+                            next_state = NOCACHE_READ;
                         end else begin
                             tag_read = 1'b1;
                             next_state = CACHE_READ;
@@ -382,6 +415,7 @@ module cache #(
 
                 end else begin
                     m_axi.ar_valid = 1'b1;
+                    m_axi.ar_id = {MASTER_ID,1'b0};
                     m_axi.ar_addr = fill_addr;
                     m_axi.ar_len = 8'd7; // 8 beats (ARLEN is length - 1)
                     trigger_fill = 1'b1;
@@ -420,12 +454,16 @@ module cache #(
                 if (core_write_val) begin
                     latch_address = 1'b1;
                     latch_write_data = 1'b1;
-                    tag_read = 1'b1;
-                    next_state = WRITE;
+                    if (uncacheable_addr) begin
+                        next_state = NOCACHE_WRITE;
+                    end else begin
+                        tag_read = 1'b1;
+                        next_state = WRITE;
+                    end
                 end else if (core_read_val) begin
                     latch_address = 1'b1;
                     if (uncacheable_addr) begin
-                        next_state = READ_WORD;
+                        next_state = NOCACHE_READ;
                     end else begin
                         tag_read = 1'b1;
                         next_state = CACHE_READ;
@@ -435,14 +473,69 @@ module cache #(
                 end
             end
 
-            READ_WORD : begin
-                m_axi.ar_valid = 1'b1;
-                m_axi.ar_addr = addr_buffer;
-                m_axi.ar_len = 8'd0; // read a single word
-                next_state = READ_WORD_WAIT;
+
+            NOCACHE_WRITE : begin
+                m_axi.aw_valid = 1'b1;
+                m_axi.aw_id = {MASTER_ID,1'b1};
+                m_axi.w_valid = 1'b1;
+                case ({m_axi.aw_ready, m_axi.w_ready})
+                    2'b11 : next_state = NOCACHE_WRITE_WAIT_RESP;
+                    2'b10 : next_state = NOCACHE_WRITE_WAIT_DATA;
+                    2'b01 : next_state = NOCACHE_WRITE_WAIT_ADDR;
+                    default;
+                endcase
             end
 
-            READ_WORD_WAIT : begin
+            NOCACHE_WRITE_WAIT_DATA : begin
+                m_axi.w_valid = 1'b1;
+                if (m_axi.w_ready) begin
+                    next_state = NOCACHE_WRITE_WAIT_RESP;
+                end
+            end
+
+            NOCACHE_WRITE_WAIT_ADDR : begin
+                m_axi.aw_valid = 1'b1;
+                m_axi.aw_id = {MASTER_ID,1'b1};
+                if (m_axi.aw_ready) begin
+                    next_state = NOCACHE_WRITE_WAIT_RESP;
+                end
+            end
+
+            NOCACHE_WRITE_WAIT_RESP : begin
+                if (m_axi.b_valid && (m_axi.b_id == {MASTER_ID,1'b1})) begin
+                    core_rdy = 1'b1;
+                    if (core_write_val) begin
+                        latch_address = 1'b1;
+                        latch_write_data = 1'b1;
+                        if (uncacheable_addr) begin
+                            next_state = NOCACHE_WRITE;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = WRITE;
+                        end
+                    end else if (core_read_val) begin
+                        latch_address = 1'b1;
+                        if (uncacheable_addr) begin
+                            next_state = NOCACHE_READ;
+                        end else begin
+                            tag_read = 1'b1;
+                            next_state = CACHE_READ;
+                        end
+                    end else begin
+                        next_state = IDLE;
+                    end
+                end
+            end
+
+            NOCACHE_READ : begin
+                m_axi.ar_valid = 1'b1;
+                m_axi.ar_id = {MASTER_ID,1'b1};
+                m_axi.ar_addr = addr_buffer;
+                m_axi.ar_len = 8'd0; // read a single word
+                next_state = NOCACHE_READ_WAIT;
+            end
+
+            NOCACHE_READ_WAIT : begin
                 m_axi.r_ready = 1'b1;
                 core_read_data = m_axi.r_data;
                 if (m_axi.r_valid) begin
@@ -457,7 +550,7 @@ module cache #(
                     end else if (core_read_val) begin
                         latch_address = 1'b1;
                         if (uncacheable_addr) begin
-                            next_state = READ_WORD;
+                            next_state = NOCACHE_READ;
                         end else begin
                             tag_read = 1'b1;
                             next_state = CACHE_READ;
@@ -475,7 +568,6 @@ module cache #(
     assign m_axi.aw_len   = '0;
     assign m_axi.aw_size  = '0;
     assign m_axi.aw_burst = '0;
-    assign m_axi.aw_id    = MASTER_ID;
     
     assign m_axi.w_data   = write_data_buffer;
     assign m_axi.w_strb   = wr_strb_buffer;
@@ -484,7 +576,6 @@ module cache #(
 
     assign m_axi.ar_size  = 3'b010;   // 4 bytes per beat (32-bit bus)
     assign m_axi.ar_burst = 2'b01;    // INCR burst type
-    assign m_axi.ar_id    = MASTER_ID;
 
     // Tie off unused signals
     assign m_axi.aw_atop   = '0;
