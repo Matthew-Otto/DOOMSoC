@@ -165,6 +165,8 @@ module cache #(
         CACHE_FILLED
     } state, next_state;
 
+    logic trigger_next_txn;
+
     always_ff @(posedge clk) begin
         if (rst) state <= RESET;
         else              state <= next_state;
@@ -211,6 +213,7 @@ module cache #(
         m_axi.r_ready = 1'b0;
         core_read_data = ds_rd_data;
         
+        trigger_next_txn = 1'b0;
 
         case (state)
             RESET : begin
@@ -225,21 +228,7 @@ module cache #(
             end
 
             IDLE : begin
-                core_rdy = 1'b1;
-                if (core_write_val) begin
-                    latch_address = 1'b1;
-                    latch_write_data = 1'b1;
-                    tag_read = 1'b1;
-                    next_state = WRITE;
-                end else if (core_read_val) begin
-                    latch_address = 1'b1;
-                    if (uncacheable_addr) begin
-                        next_state = READ_WORD;
-                    end else begin
-                        tag_read = 1'b1;
-                        next_state = CACHE_READ;
-                    end
-                end
+                trigger_next_txn = 1'b1;
             end
 
             WRITE : begin
@@ -251,26 +240,7 @@ module cache #(
                 m_axi.w_valid = 1'b1;
 
                 case ({m_axi.aw_ready, m_axi.w_ready})
-                    2'b11 : begin
-                        core_rdy = 1'b1;
-                        if (core_write_val) begin
-                            latch_address = 1'b1;
-                            latch_write_data = 1'b1;
-                            tag_read = 1'b1;
-                            next_state = WRITE;
-                        end else if (core_read_val) begin
-                            latch_address = 1'b1;
-                            if (uncacheable_addr) begin
-                                next_state = READ_WORD;
-                            end else begin
-                                tag_read = 1'b1;
-                                next_state = CACHE_READ;
-                            end
-                        end else begin
-                            next_state = IDLE;
-                        end
-                    end
-
+                    2'b11 : trigger_next_txn = 1'b1;
                     2'b10 : next_state = WRITE_WAIT_DATA;
                     2'b01 : next_state = WRITE_WAIT_ADDR;
                     2'b00 : next_state = WRITE_WAIT;
@@ -282,26 +252,7 @@ module cache #(
                 m_axi.w_valid = 1'b1;
 
                 case ({m_axi.aw_ready, m_axi.w_ready})
-                    2'b11 : begin
-                        core_rdy = 1'b1;
-                        if (core_write_val) begin
-                            latch_address = 1'b1;
-                            latch_write_data = 1'b1;
-                            tag_read = 1'b1;
-                            next_state = WRITE;
-                        end else if (core_read_val) begin
-                            latch_address = 1'b1;
-                            if (uncacheable_addr) begin
-                                next_state = READ_WORD;
-                            end else begin
-                                tag_read = 1'b1;
-                                next_state = CACHE_READ;
-                            end
-                        end else begin
-                            next_state = IDLE;
-                        end
-                    end
-
+                    2'b11 : trigger_next_txn = 1'b1;
                     2'b10 : next_state = WRITE_WAIT_DATA;
                     2'b01 : next_state = WRITE_WAIT_ADDR;
                     2'b00 : next_state = WRITE_WAIT;
@@ -311,46 +262,14 @@ module cache #(
             WRITE_WAIT_DATA : begin
                 m_axi.w_valid = 1'b1;
                 if (m_axi.w_ready) begin
-                    core_rdy = 1'b1;
-                    if (core_write_val) begin
-                        latch_address = 1'b1;
-                        latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = WRITE;
-                    end else if (core_read_val) begin
-                        latch_address = 1'b1;
-                        if (uncacheable_addr) begin
-                            next_state = READ_WORD;
-                        end else begin
-                            tag_read = 1'b1;
-                            next_state = CACHE_READ;
-                        end
-                    end else begin
-                        next_state = IDLE;
-                    end
+                    trigger_next_txn = 1'b1;
                 end
             end
 
             WRITE_WAIT_ADDR : begin
                 m_axi.aw_valid = 1'b1;
                 if (m_axi.aw_ready) begin
-                    core_rdy = 1'b1;
-                    if (core_write_val) begin
-                        latch_address = 1'b1;
-                        latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = WRITE;
-                    end else if (core_read_val) begin
-                        latch_address = 1'b1;
-                        if (uncacheable_addr) begin
-                            next_state = READ_WORD;
-                        end else begin
-                            tag_read = 1'b1;
-                            next_state = CACHE_READ;
-                        end
-                    end else begin
-                        next_state = IDLE;
-                    end
+                    trigger_next_txn = 1'b1;
                 end
             end
 
@@ -359,27 +278,7 @@ module cache #(
                 core_read_data_val = tag_hit;
 
                 if (tag_hit || core_flush) begin
-                    // pipeline writes
-                    if (core_write_val) begin
-                        latch_address = 1'b1;
-                        latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = WRITE;
-                    
-                    // pipeline reads
-                    end else if (core_read_val) begin
-                        latch_address = 1'b1;
-                        if (uncacheable_addr) begin
-                            next_state = READ_WORD;
-                        end else begin
-                            tag_read = 1'b1;
-                            next_state = CACHE_READ;
-                        end
-
-                    end else begin
-                        next_state = IDLE;
-                    end
-
+                    trigger_next_txn = 1'b1;
                 end else begin
                     m_axi.ar_valid = 1'b1;
                     m_axi.ar_addr = fill_addr;
@@ -415,24 +314,7 @@ module cache #(
             CACHE_FILLED : begin
                 core_read_data_val = pending_fill && ~core_flush;
                 fill_complete = 1'b1;
-
-                core_rdy = 1'b1;
-                if (core_write_val) begin
-                    latch_address = 1'b1;
-                    latch_write_data = 1'b1;
-                    tag_read = 1'b1;
-                    next_state = WRITE;
-                end else if (core_read_val) begin
-                    latch_address = 1'b1;
-                    if (uncacheable_addr) begin
-                        next_state = READ_WORD;
-                    end else begin
-                        tag_read = 1'b1;
-                        next_state = CACHE_READ;
-                    end
-                end else begin
-                    next_state = IDLE;
-                end
+                trigger_next_txn = 1'b1;
             end
 
             READ_WORD : begin
@@ -447,27 +329,30 @@ module cache #(
                 core_read_data = m_axi.r_data;
                 if (m_axi.r_valid) begin
                     core_read_data_val = 1'b1;
-                    
-                    core_rdy = 1'b1;
-                    if (core_write_val) begin
-                        latch_address = 1'b1;
-                        latch_write_data = 1'b1;
-                        tag_read = 1'b1;
-                        next_state = WRITE;
-                    end else if (core_read_val) begin
-                        latch_address = 1'b1;
-                        if (uncacheable_addr) begin
-                            next_state = READ_WORD;
-                        end else begin
-                            tag_read = 1'b1;
-                            next_state = CACHE_READ;
-                        end
-                    end else begin
-                        next_state = IDLE;
-                    end
+                    trigger_next_txn = 1'b1;
                 end
             end
         endcase
+
+        if (trigger_next_txn) begin
+            core_rdy = 1'b1;
+            if (core_write_val) begin
+                latch_address = 1'b1;
+                latch_write_data = 1'b1;
+                tag_read = 1'b1;
+                next_state = WRITE;
+            end else if (core_read_val) begin
+                latch_address = 1'b1;
+                if (uncacheable_addr) begin
+                    next_state = READ_WORD;
+                end else begin
+                    tag_read = 1'b1;
+                    next_state = CACHE_READ;
+                end
+            end else begin
+                next_state = IDLE;
+            end
+        end
     end
 
     
