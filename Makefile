@@ -130,8 +130,6 @@ $(BOOTLOADER_HEX): $(FW_SRC)
 ### SIMULATION ###
 ##################
 
-.PHONY: sim waves
-
 soc_sim: $(BOOTLOADER_HEX)
 	cd $(SIM_DIR) && python3 test_soc.py
 

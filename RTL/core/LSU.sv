@@ -132,7 +132,7 @@ module LSU #(
         .core_read_val(load),
         .core_write_val(wr_en),
         .core_write_data(aligned_write_data),
-        .fill_in_progress(ld_inflight),
+        .ld_in_progress(ld_inflight),
         .core_read_data,
         .core_read_data_val(ld_valid),
         .m_axi(dcache_port)

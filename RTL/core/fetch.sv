@@ -58,7 +58,7 @@ module fetch #(
         .core_read_val(1'b1),
         .core_write_val('0),
         .core_write_data('0),
-        .fill_in_progress(),
+        .ld_in_progress(),
         .core_read_data(instr_FE),
         .core_read_data_val(valid_FE),
         .m_axi(icache_port)

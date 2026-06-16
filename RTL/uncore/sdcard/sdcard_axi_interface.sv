@@ -150,7 +150,7 @@ module sdcard_axi_interface #(
     );
 
     tdp_bram_be #(
-        .ADDR_WIDTH(BUFFER_ADDR_WIDTH-7), // BOZO
+        .ADDR_WIDTH(BUFFER_ADDR_WIDTH), // BOZO this isnt inferring as BRAM???????
         .DATA_WIDTH(AXI_DATA_WIDTH)
     ) data_buffer (
         .clk_a(bus_clk),

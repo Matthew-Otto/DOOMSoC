@@ -19,7 +19,7 @@ module cache #(
     input  logic [3:0]  core_write_val,
     input  logic [31:0] core_write_data,
 
-    output logic        fill_in_progress,
+    output logic        ld_in_progress,
     output logic [31:0] core_read_data,
     output logic        core_read_data_val,
 
@@ -192,7 +192,7 @@ module cache #(
 
         incr_fill_addr = 1'b0;
         trigger_fill = 1'b0;
-        fill_in_progress = 1'b0;
+        ld_in_progress = 1'b0;
         fill_complete = 1'b0;
 
         ts_rd_addr = core_index;
@@ -294,7 +294,7 @@ module cache #(
                     m_axi.ar_addr = fill_addr;
                     m_axi.ar_len = 8'd7; // 8 beats (ARLEN is length - 1)
                     trigger_fill = 1'b1;
-                    fill_in_progress = 1'b1;
+                    ld_in_progress = 1'b1;
                     next_state = FILL_CACHE;
                 end
             end
@@ -303,7 +303,7 @@ module cache #(
                 m_axi.r_ready = 1'b1;
                 ds_wr_addr = {fill_index, fill_word_os};
                 ds_wr_data = m_axi.r_data;
-                fill_in_progress = 1'b1;
+                ld_in_progress = 1'b1;
 
                 if (m_axi.r_valid) begin
                     ds_wr_en = 4'hF;
@@ -386,6 +386,7 @@ module cache #(
                 m_axi.ar_id = {MASTER_ID,1'b1};
                 m_axi.ar_addr = addr_buffer;
                 m_axi.ar_len = 8'd0; // read a single word
+                ld_in_progress = 1'b1;
                 next_state = NOCACHE_READ_WAIT;
             end
 
@@ -395,6 +396,8 @@ module cache #(
                 if (m_axi.r_valid) begin
                     core_read_data_val = 1'b1;
                     trigger_next_txn = 1'b1;
+                end else begin
+                    ld_in_progress = 1'b1;
                 end
             end
         endcase

@@ -228,7 +228,7 @@ module sd_csr (
         if (rst) begin
             spi_byte <= '0;
             busy <= 1'b0;
-        end else if (spi_write) begin
+        end else if (spi_write) begin // BOZO also busy for block transfers
             spi_byte <= spi_data_wr;
             busy <= 1'b1;
         end else if (spi_read) begin
