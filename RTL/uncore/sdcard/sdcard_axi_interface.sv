@@ -170,10 +170,10 @@ module sdcard_axi_interface #(
     //// SD Card PHY ///////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic [9:0]  read_addr;
-    logic [31:0] read_data;
-    logic [9:0]  write_addr;
-    logic [31:0] write_data;
+    logic spi_miso;
+`ifndef VERILATOR
+    assign spi_miso = sd_dat[0];
+`endif
 
     sdcard_spi_phy #(
         .ADDR_WIDTH(BUFFER_ADDR_WIDTH),
@@ -199,9 +199,10 @@ module sdcard_axi_interface #(
         .read_data(sd_rd_data),
         .write_en(sd_wr_en),
         .write_data(sd_wr_data),
+        .sd_clk,
         .sd_clk_en,
         .mosi(sd_cmd),
-        .miso(sd_dat[0]),
+        .miso(spi_miso),
         .cs(sd_dat[3])
     );
 

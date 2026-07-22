@@ -33,7 +33,17 @@ class SDCard:
             self._log(f"Received CMD{cmd_idx} with address 0x{addr:08X}")
             
             # Process Command
-            if cmd_idx == 17: # CMD17 - Read Block
+            if cmd_idx == 0:   # CMD0 - GO_IDLE_STATE
+                await self._send_r1(0x01)
+            elif cmd_idx == 8: # CMD8 - SEND_IF_COND
+                # R7 Response: 1 byte R1 + 4 bytes echoed argument
+                await self._send_r1(0x01) 
+                # Echo back the exact 4 bytes of the argument the host sent
+                await self._shift_byte(cmd[1]) # Usually 0x00
+                await self._shift_byte(cmd[2]) # Usually 0x00
+                await self._shift_byte(cmd[3]) # VHS (Usually 0x01)
+                await self._shift_byte(cmd[4]) # Check Pattern (Usually 0xAA)
+            elif cmd_idx == 17: # CMD17 - Read Block
                 await self._send_r1(0x00)
                 await self._wait_dummy_bytes(2)
                 await self._send_data_block(addr)
@@ -41,7 +51,6 @@ class SDCard:
                 await self._send_r1(0x00)
                 await self._receive_data_block(addr)
             else:
-                # Default mock response for CMD0, CMD8, etc.
                 await self._send_r1(0x00)
 
 
@@ -49,17 +58,16 @@ class SDCard:
         """Shifts out tx_byte on MISO, shifts in rx_byte from MOSI"""
         rx_byte = 0
         for i in range(8):
-            # Drive MISO bit (MSB first)
+            # Drive MISO bit
             self.miso.value = (tx_byte >> (7 - i)) & 1
-            
-            while True:
-                await RisingEdge(self.clk)
-                if self.cs.value == 1:
-                    self.miso.value = 1
-                    return None # CS de-asserted, abort transfer
-                # Sample MOSI bit
-                rx_byte = (rx_byte << 1) | int(self.mosi.value)
-                break
+
+            # Sample MOSI bit
+            await RisingEdge(self.clk)
+            rx_byte = (rx_byte << 1) | int(self.mosi.value)
+
+            if self.cs.value == 1:
+                self.miso.value = 1
+                return None # CS de-asserted, abort transfer
                     
         return rx_byte
 

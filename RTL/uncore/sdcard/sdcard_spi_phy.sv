@@ -33,6 +33,7 @@ module sdcard_spi_phy #(
     output logic [31:0]           write_data,
 
     // SPI interface
+    output logic sd_clk,
     output logic sd_clk_en,
     output logic mosi,
     input  logic miso,
@@ -334,7 +335,6 @@ module sdcard_spi_phy #(
 
     logic init_clk;
     logic sd_clk_gen;
-    logic sd_clk;
 
     // very slow (400khz-100khz) SD card init clock generator
     clk_gen #(

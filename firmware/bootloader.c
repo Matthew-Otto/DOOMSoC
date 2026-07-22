@@ -130,7 +130,7 @@ int init_sdcard() {
     if (r1 != 0x00) return -1;
     
     // Set CS high in-between transfers
-    SET_BIT(sdcard->csr, SET_CS);
+    SET_BIT(sdcard->csr, CLR_CS);
 
     return 0;
 }

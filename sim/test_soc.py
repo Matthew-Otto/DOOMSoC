@@ -7,6 +7,7 @@ from pathlib import Path
 from utils.utils import *
 from utils.spike_runner import *
 from models.sdram import SDRAM
+from models.sdcard_spi import SDCard
 
 import cocotb
 from cocotb_tools.runner import get_runner
@@ -17,7 +18,7 @@ from cocotb.triggers import Timer, ReadOnly, ReadWrite, ClockCycles, RisingEdge,
 
 @cocotb.test()
 async def test_soc(dut):
-    setup_file_logger(dut._log, "INFO")
+    setup_file_logger(dut._log, "DEBUG")
 
     dut._log.info(f"Executing Bootloader")
 
@@ -26,8 +27,19 @@ async def test_soc(dut):
     sd_clk = dut.sdcard_clk
     reset = dut.sys_clk_rst
 
+    mem = {
+        0xdeadbeef * 512: 0xa7
+    }
+
     # init system
     sdram = SDRAM(dut.sdram_i.sdram_controller_i, clk)
+    sdcard = SDCard(dut,
+        clk=dut.sd_clk,
+        cs=dut.sdcard_i.sdcard_spi_phy_i.cs,
+        mosi=dut.sdcard_i.sdcard_spi_phy_i.mosi,
+        miso=dut.sdcard_i.spi_miso,
+        mem=mem
+    )
     sys_clk_ps = round((1/81_000_000) * 1e12)
     p_clk_ps = round((1/81_000_000) * 1e12) #39.682 ns
     cocotb.start_soon(Clock(clk, sys_clk_ps, unit="ps").start())
@@ -40,7 +52,7 @@ async def test_soc(dut):
     dut.sclk_pll_lock.value = 1
     await FallingEdge(reset)
 
-    await ClockCycles(clk, 1000000)
+    await ClockCycles(clk, 300000)
     await ClockCycles(clk, 10)
 
 

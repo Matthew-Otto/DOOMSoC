@@ -400,6 +400,7 @@ module top #(
         .s_axi(axi_mst_ports[3])
     );
 
+`ifndef VERILATOR
     ODDR sd_clk_io_driver (
         .D0(sd_clk_en),
         .D1(1'b0),
@@ -408,6 +409,9 @@ module top #(
         .Q0(sd_clk),
         .Q1()
     );
+`else
+    assign sd_clk = sd_clk_en & sd_clk_ungated;
+`endif
 
 
     ////////////////////////////////////////////////////////////////////////
