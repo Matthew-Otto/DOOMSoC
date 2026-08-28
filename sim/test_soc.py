@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 
-import os
-import shutil
-import random
 from pathlib import Path
 from utils.utils import *
-from utils.spike_runner import *
 from models.sdram import SDRAM
 from models.sdcard_spi import SDCard
 

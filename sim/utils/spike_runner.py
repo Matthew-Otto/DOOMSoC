@@ -28,7 +28,7 @@ class SpikeRunner:
         if hasattr(self, "process"):
             self.process.terminate(force=True)
 
-        print(f"Launching Spike simulator with {self.elf_file} | {" ".join(self.cmd)}")
+        print(f"Launching Spike simulator with {self.elf_file} | {' '.join(self.cmd)}")
         env = os.environ.copy()
         env['TERM'] = 'dumb' # strips out terminal characters
 
@@ -117,7 +117,7 @@ class SpikeRunner:
                 alias = abi_names[reg_num]
                 val = regs[reg_num]
                 val_str = f"0x{val & 0xFFFFFFFF:08x}" 
-                entry = f"x{reg_num:<2} ({alias+")":<4}: {val_str}"
+                entry = f"x{reg_num:<2} ({alias+')':<4}: {val_str}"
                 row_entries.append(entry)
                 
             reg_string += "    ".join(row_entries)

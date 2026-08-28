@@ -1,4 +1,5 @@
 .vscode
+.python-libs
 build/
 docs/
 sim_build/
