@@ -15,4 +15,4 @@ The original DOOM sourcecode can be found at https://github.com/id-Software/DOOM
 
 [oss-cad-suite-build-bin](https://github.com/YosysHQ/oss-cad-suite-build)
 
-[riscv-gnu-toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain) (`risc-v` package group on arch)
+[riscv64-elf-gcc](https://github.com/riscv-collab/riscv-gnu-toolchain)
