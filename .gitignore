@@ -1,5 +1,5 @@
 .vscode
-.python-libs
+.venv
 build/
 docs/
 sim_build/

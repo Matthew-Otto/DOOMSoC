@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+if [ "$_" = "$0" ]; then
+    echo "Error: This script must be sourced, not executed."
+    echo "Run: source $0"
+    exit 1
+fi
+
+OSS_CAD_SUITE_PATH="/opt/oss-cad-suite/environment"
+VENV_DIR=".venv"
+
+# Capture system Python BEFORE it gets masked by OSS CAD Suite
+if [ -z "$SYSTEM_PYTHON" ]; then
+    echo "[-] Saving system Python path $(which python3) to SYSTEM_PYTHON"
+    SYSTEM_PYTHON=$(which python3)
+fi
+
+if [ -f "$OSS_CAD_SUITE_PATH" ]; then
+    echo "[-] Sourcing OSS CAD Suite from $OSS_CAD_SUITE_PATH."
+    source "$OSS_CAD_SUITE_PATH"
+else
+    echo "[!] Error: Could not find OSS CAD Suite at $OSS_CAD_SUITE_PATH"
+    return 1 2>/dev/null || exit 1
+fi
+
+if [ ! -d "$VENV_DIR" ]; then
+    echo "[-] Creating virtual environment using local $SYSTEM_PYTHON"
+    "$SYSTEM_PYTHON" -m venv "$VENV_DIR"
+    echo "[-] Activating virtual environment."
+    source "$VENV_DIR/bin/activate"
+    echo "[-] Installing Python dependencies."
+    # Now 'python3' safely refers to the local venv Python
+    python3 -m pip install -U pip 
+    COCOTB_IGNORE_PYTHON_REQUIRES=1 python3 -m pip install cocotb cocotbext-axi 
+    python3 -m pip install pexpect
+else
+    echo "[-] Activating virtual environment."
+    source "$VENV_DIR/bin/activate"
+fi
+
+
+echo "=================================================="
+echo "SUCCESS: Environment is set up"
+echo -e "$(python3 --version)\n$(which python3)"
+echo -e "cocotb\n$(which cocotb-config)"
+echo -e "$(verilator --version)\n$(which verilator)"
+echo -e "$(yosys --version)\n$(which yosys)"
+echo -e "$(nextpnr-himbaechel --version)$(which nextpnr-himbaechel)"
+echo -e "$(openFPGALoader --version)\n$(which openFPGALoader)"
+echo -e "$(surfer --version)\n$(which surfer)"
+echo "=================================================="

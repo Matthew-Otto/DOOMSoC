@@ -21,10 +21,10 @@ BOARD = tangnano20k
 FAMILY = GW2A-18C
 
 # OSS CAD Suite commands - each wrapped with environment source
-YOSYS = source /opt/oss-cad-suite/environment && yosys
-NEXTPNR = source /opt/oss-cad-suite/environment && nextpnr-himbaechel
-GOWIN_PACK = source /opt/oss-cad-suite/environment && gowin_pack
-OPENFPGALOADER = source /opt/oss-cad-suite/environment && openFPGALoader
+YOSYS = yosys
+NEXTPNR = nextpnr-himbaechel
+GOWIN_PACK = gowin_pack
+OPENFPGALOADER = openFPGALoader
 
 # Firmware variables
 FIRMWARE_DIR = firmware
@@ -159,3 +159,5 @@ clean:
 	rm -rf $(SIM_DIR)__pycache__
 	rm -f $(SIM_DIR)results.xml
 	rm -rf $(SIM_DIR)sim_build
+	rm -rf .venv
+	@echo "INFO: venv deleted. Make sure to rerun 'source setup_env'"
