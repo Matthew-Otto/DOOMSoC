@@ -11,7 +11,7 @@ This repo contains a copy of the modified DOOM source code along with the origin
 The original DOOM sourcecode can be found at https://github.com/id-Software/DOOM
 
 
-#### Deps:
+#### Dependencies:
 
 [oss-cad-suite-build-bin](https://github.com/YosysHQ/oss-cad-suite-build)
 
