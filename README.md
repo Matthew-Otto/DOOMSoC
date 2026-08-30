@@ -16,3 +16,17 @@ The original DOOM sourcecode can be found at https://github.com/id-Software/DOOM
 [oss-cad-suite-build-bin](https://github.com/YosysHQ/oss-cad-suite-build)
 
 [riscv64-elf-gcc](https://github.com/riscv-collab/riscv-gnu-toolchain)
+
+
+#### Instructions:
+
+source setup_env
+
+##### Simulate:
+run `make soc_sim`
+
+##### Build:
+run `make asm`
+
+##### Program FPGA:
+run `make flash`
