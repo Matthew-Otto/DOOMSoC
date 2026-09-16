@@ -1,4 +1,4 @@
-# FPGA build Makefile for tangnano20k (GW2A-18C)
+# FPGA build Makefile for doomsoc project targeting tangnano20k (GW2A-18C)
 
 SRC_DIR = RTL
 SIM_DIR = ./sim/
@@ -20,22 +20,17 @@ DEVICE = GW2AR-LV18QN88C8/I7
 BOARD = tangnano20k
 FAMILY = GW2A-18C
 
-# OSS CAD Suite commands - each wrapped with environment source
+# OSS CAD Suite tools
 YOSYS = yosys
 NEXTPNR = nextpnr-himbaechel
 GOWIN_PACK = gowin_pack
 OPENFPGALOADER = openFPGALoader
 
-# Firmware variables
-FIRMWARE_DIR = firmware
-BOOTLOADER_HEX = $(FIRMWARE_DIR)/bin/bootloader.hex
-# Track all firmware C files, headers, assembly files, linker scripts, and makefile
-FW_SRC = $(shell find $(FIRMWARE_DIR) -type f \( -name '*.[chS]' -o -name '*.ld' -o -name 'Makefile' \))
 
 
-##################
-### FPGA BUILD ###
-##################
+######################################################################
+#### HARDWARE ########################################################
+######################################################################
 
 .PHONY: all clean flash flash_persist synth pnr asm
 
@@ -115,9 +110,16 @@ pnr: $(PNR_OUT)
 asm: $(BITSTREAM)
 
 
-##################
-#### Firmware ####
-##################
+
+######################################################################
+#### Firmware ########################################################
+######################################################################
+
+FIRMWARE_DIR = firmware
+BOOTLOADER_HEX = $(FIRMWARE_DIR)/bin/bootloader.hex
+# Track all firmware C files, headers, assembly files, linker scripts, and makefile
+FW_SRC = $(shell find $(FIRMWARE_DIR) -type f \( -name '*.[chS]' -o -name '*.ld' -o -name 'Makefile' \))
+
 
 $(BOOTLOADER_HEX): $(FW_SRC)
 	@echo "========================================"
@@ -126,9 +128,16 @@ $(BOOTLOADER_HEX): $(FW_SRC)
 	$(MAKE) -C $(FIRMWARE_DIR)
 
 
-##################
-### SIMULATION ###
-##################
+
+######################################################################
+#### SOFTWARE ########################################################
+######################################################################
+
+
+
+######################################################################
+### SIMULATION #######################################################
+######################################################################
 
 soc_sim: $(BOOTLOADER_HEX)
 	cd $(SIM_DIR) && python3 test_soc.py
