@@ -26,6 +26,12 @@ NEXTPNR = nextpnr-himbaechel
 GOWIN_PACK = gowin_pack
 OPENFPGALOADER = openFPGALoader
 
+# Firmware
+FIRMWARE_DIR = firmware
+BOOTLOADER_HEX = $(FIRMWARE_DIR)/bin/bootloader.hex
+# Track all firmware C files, headers, assembly files, linker scripts, and makefile
+FW_SRC = $(shell find $(FIRMWARE_DIR) -type f \( -name '*.[chS]' -o -name '*.ld' -o -name 'Makefile' \))
+
 
 
 ######################################################################
@@ -75,7 +81,7 @@ $(SYNTH_OUT): $(SRC) $(BOOTLOADER_HEX) | $(BUILD_DIR)
 	@echo "========================================"
 	$(YOSYS) -l $(SYNTH_REPORT) -m slang -p "\
         read_slang --top top --keep-hierarchy $(SRC); \
-        hierarchy -check -top top; \
+		hierarchy -check -top top; \
         synth_gowin -top top -abc9 -json $(SYNTH_OUT); \
     "
 	@printf "\nSynthesis Warnings:\n"
@@ -114,12 +120,6 @@ asm: $(BITSTREAM)
 ######################################################################
 #### Firmware ########################################################
 ######################################################################
-
-FIRMWARE_DIR = firmware
-BOOTLOADER_HEX = $(FIRMWARE_DIR)/bin/bootloader.hex
-# Track all firmware C files, headers, assembly files, linker scripts, and makefile
-FW_SRC = $(shell find $(FIRMWARE_DIR) -type f \( -name '*.[chS]' -o -name '*.ld' -o -name 'Makefile' \))
-
 
 $(BOOTLOADER_HEX): $(FW_SRC)
 	@echo "========================================"
@@ -168,5 +168,8 @@ clean:
 	rm -rf $(SIM_DIR)__pycache__
 	rm -f $(SIM_DIR)results.xml
 	rm -rf $(SIM_DIR)sim_build
+	
+cleanall:
+	clean	
 	rm -rf .venv
 	@echo "INFO: venv deleted. Make sure to rerun 'source setup_env'"
