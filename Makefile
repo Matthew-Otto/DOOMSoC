@@ -33,12 +33,14 @@ BOOTLOADER_HEX = $(FIRMWARE_DIR)/bin/bootloader.hex
 FW_SRC = $(shell find $(FIRMWARE_DIR) -type f \( -name '*.[chS]' -o -name '*.ld' -o -name 'Makefile' \))
 
 
+.PHONY: all clean flash flash_persist synth pnr asm
+.DELETE_ON_ERROR:
+
+
 
 ######################################################################
 #### HARDWARE ########################################################
 ######################################################################
-
-.PHONY: all clean flash flash_persist synth pnr asm
 
 #---------------------------------------------------------------------
 # Main build target
@@ -80,9 +82,12 @@ $(SYNTH_OUT): $(SRC) $(BOOTLOADER_HEX) | $(BUILD_DIR)
 	@echo "Running synthesis..."
 	@echo "========================================"
 	$(YOSYS) -l $(SYNTH_REPORT) -m slang -p "\
-        read_slang --top top --keep-hierarchy $(SRC); \
+        read_slang --top top $(SRC); \
 		hierarchy -check -top top; \
-        synth_gowin -top top -abc9 -json $(SYNTH_OUT); \
+        synth_gowin -top top -abc9; \
+        techmap -map $(SYNTH_DIR)buf_map.v; \
+        opt_clean -purge; \
+        write_json $(SYNTH_OUT); \
     "
 	@printf "\nSynthesis Warnings:\n"
 	@grep -i "warning" $(SYNTH_REPORT) || true

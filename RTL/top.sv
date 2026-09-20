@@ -43,11 +43,11 @@ module top #(
     //// Clocks ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    logic sys_clk;  // Main system clock
+    (* keep = "true" *) logic sys_clk;  // Main system clock
     logic sys_clk_gen;
     logic sdcard_clk;
-    logic p_clk;    // HDMI pixel clock
-    logic s_clk;    // HDMI serializer clock (10 bit / p_clk) (DDR)
+    (* keep = "true" *) logic p_clk;    // HDMI pixel clock
+    (* keep = "true" *) logic s_clk;    // HDMI serializer clock (10 bit / p_clk) (DDR)
     logic s_clk_gen;
 
     logic sys_pll_lock;
