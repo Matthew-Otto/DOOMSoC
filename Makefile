@@ -84,7 +84,7 @@ $(SYNTH_OUT): $(SRC) $(BOOTLOADER_HEX) | $(BUILD_DIR)
 	$(YOSYS) -l $(SYNTH_REPORT) -m slang -p "\
         read_slang --top top $(SRC); \
 		hierarchy -check -top top; \
-        synth_gowin -top top -abc9; \
+        synth_gowin -family gw2a -top top -retime; \
         techmap -map $(SYNTH_DIR)buf_map.v; \
         opt_clean -purge; \
         write_json $(SYNTH_OUT); \
@@ -101,10 +101,11 @@ $(PNR_OUT): $(SYNTH_OUT) $(CST) $(SDC)
 		--device $(DEVICE) \
 		--vopt family=$(FAMILY) \
 		--vopt cst=$(CST) \
+		--vopt ioreg_in_iob \
 		--log $(PNR_REPORT) \
 		--sdc $(SDC) \
 		--tmg-ripup \
-		-r
+		--randomize-seed
 	@printf "\nPnR Warnings:\n"
 	@grep -i "warning" $(PNR_REPORT) || true
 

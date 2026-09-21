@@ -104,3 +104,34 @@ module DCS #(
     output CLKOUT
 );
 endmodule
+
+(* blackbox *)
+module DPB #(
+    parameter READ_MODE0 = 1'b0,
+    parameter READ_MODE1 = 1'b0,
+    parameter WRITE_MODE0 = 2'b01,
+    parameter WRITE_MODE1 = 2'b01,
+    parameter BIT_WIDTH_0 = 16,
+    parameter BIT_WIDTH_1 = 16,
+    parameter RESET_MODE = "SYNC"
+) (
+    output logic [15:0] DOA,
+    output logic [15:0] DOB,
+    input  logic [15:0] DIA,
+    input  logic [15:0] DIB,
+    input  logic [13:0] ADA,
+    input  logic [13:0] ADB,
+    input  logic        WREA,
+    input  logic        WREB,
+    input  logic        CLKA,
+    input  logic        CLKB,
+    input  logic        CEA,
+    input  logic        CEB,
+    input  logic        RESETA,
+    input  logic        RESETB,
+    input  logic        OCEA,
+    input  logic        OCEB,
+    input  logic [2:0]  BLKSELA,
+    input  logic [2:0]  BLKSELB
+);
+endmodule

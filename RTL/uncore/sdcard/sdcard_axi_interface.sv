@@ -123,7 +123,7 @@ module sdcard_axi_interface #(
     //// Block Buffer //////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////
 
-    localparam BUFFER_ADDR_WIDTH = 8;
+    localparam BUFFER_ADDR_WIDTH = 7;
 
     logic [3:0]                   axi_wr_en;
     logic [BUFFER_ADDR_WIDTH-1:0] axi_buffer_addr;

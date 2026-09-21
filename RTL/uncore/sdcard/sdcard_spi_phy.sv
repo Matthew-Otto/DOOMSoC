@@ -1,5 +1,5 @@
 module sdcard_spi_phy #(
-    parameter int ADDR_WIDTH=8,
+    parameter int ADDR_WIDTH=7,
     parameter int SD_CLK_FREQ=81_000_000/4
 ) (
     input  logic clk,
